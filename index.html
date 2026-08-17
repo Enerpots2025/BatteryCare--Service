@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BatteryCare OS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#12161B;
+  --surface:#1B2128;
+  --surface-2:#222932;
+  --border:#2C343D;
+  --text:#EDEFF2;
+  --muted:#8B95A1;
+  --amber:#FFB020;
+  --amber-dim:#5B4A21;
+  --green:#4ADE80;
+  --green-dim:#1F3D2C;
+  --red:#F0554A;
+  --red-dim:#3D2320;
+  --blue:#5B9DF5;
+  --radius:10px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'IBM Plex Sans',sans-serif;
+  font-size:14px;
+  min-height:100vh;
+}
+h1,h2,h3{font-family:'Space Grotesk',sans-serif; margin:0; letter-spacing:-0.01em;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+button{font-family:inherit; cursor:pointer;}
+::selection{background:var(--amber); color:#12161B;}
+
+/* ---- Topbar ---- */
+.topbar{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 22px; border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg,#161B21,#12161B);
+  position:sticky; top:0; z-index:50;
+}
+.brand{display:flex; align-items:center; gap:10px;}
+.brand-mark{display:flex; gap:2px; align-items:flex-end;}
+.brand-mark span{width:5px; background:var(--amber); border-radius:1px; display:block;}
+.brand-mark span:nth-child(1){height:8px;}
+.brand-mark span:nth-child(2){height:13px;}
+.brand-mark span:nth-child(3){height:18px;}
+.brand-mark span:nth-child(4){height:11px;}
+.brand-title{font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:17px;}
+.brand-sub{color:var(--muted); font-size:11px; margin-top:1px;}
+.role-toggle{display:flex; background:var(--surface); border:1px solid var(--border); border-radius:999px; padding:3px;}
+.role-toggle button{
+  border:none; background:transparent; color:var(--muted); padding:7px 16px; border-radius:999px;
+  font-size:12.5px; font-weight:600; letter-spacing:.02em;
+}
+.role-toggle button.active{background:var(--amber); color:#12161B;}
+
+/* ---- Layout ---- */
+.layout{display:flex; min-height:calc(100vh - 58px);}
+.sidebar{
+  width:210px; border-right:1px solid var(--border); padding:16px 10px;
+  flex-shrink:0; background:#151A20;
+}
+.sidebar .grp-label{color:var(--muted); font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; padding:12px 10px 6px;}
+.sidebar button{
+  display:flex; align-items:center; gap:9px; width:100%; text-align:left;
+  background:transparent; border:none; color:var(--text); padding:9px 10px; border-radius:8px;
+  font-size:13px; margin-bottom:1px;
+}
+.sidebar button:hover{background:var(--surface);}
+.sidebar button.active{background:var(--surface-2); color:var(--amber); font-weight:600;}
+.sidebar button .dot{width:6px; height:6px; border-radius:50%; background:var(--border); flex-shrink:0;}
+.sidebar button.active .dot{background:var(--amber);}
+.main{flex:1; padding:24px 28px; overflow-x:auto;}
+
+/* ---- Page header ---- */
+.page-head{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:18px; gap:16px; flex-wrap:wrap;}
+.page-head h2{font-size:20px;}
+.page-head p{color:var(--muted); font-size:12.5px; margin-top:4px;}
+.btn{
+  background:var(--amber); color:#12161B; border:none; padding:9px 16px; border-radius:8px;
+  font-weight:600; font-size:13px;
+}
+.btn.secondary{background:var(--surface-2); color:var(--text); border:1px solid var(--border);}
+.btn.danger{background:var(--red-dim); color:var(--red); border:1px solid var(--red);}
+.btn.small{padding:5px 10px; font-size:11.5px; border-radius:6px;}
+.btn:disabled{opacity:.4; cursor:not-allowed;}
+
+/* ---- KPI Cards ---- */
+.kpi-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:12px; margin-bottom:22px;}
+.kpi-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px;}
+.kpi-card .lbl{color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em;}
+.kpi-card .val{font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; margin-top:6px;}
+.kpi-card .sub{font-size:11px; color:var(--muted); margin-top:4px;}
+
+/* Segmented battery gauge - signature element */
+.gauge{display:flex; align-items:center; gap:8px;}
+.gauge .cells{display:flex; gap:2px;}
+.gauge .cell{width:7px; height:14px; border-radius:2px; background:var(--surface-2); border:1px solid var(--border);}
+.gauge .cell.on-green{background:var(--green); border-color:var(--green);}
+.gauge .cell.on-amber{background:var(--amber); border-color:var(--amber);}
+.gauge .cell.on-red{background:var(--red); border-color:var(--red);}
+.gauge .pct{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); min-width:34px;}
+
+/* ---- Tables ---- */
+.table-wrap{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;}
+table{width:100%; border-collapse:collapse; font-size:12.5px;}
+thead th{
+  text-align:left; padding:10px 12px; background:var(--surface-2); color:var(--muted);
+  font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.04em;
+  border-bottom:1px solid var(--border); white-space:nowrap;
+}
+tbody td{padding:9px 12px; border-bottom:1px solid var(--border); white-space:nowrap;}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover{background:#1F262E;}
+.id-cell{font-family:'IBM Plex Mono',monospace; color:var(--amber); font-size:12px;}
+.empty-row td{color:var(--muted); text-align:center; padding:26px; font-style:italic;}
+
+/* Badges */
+.badge{display:inline-block; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600;}
+.badge.green{background:var(--green-dim); color:var(--green);}
+.badge.amber{background:var(--amber-dim); color:var(--amber);}
+.badge.red{background:var(--red-dim); color:var(--red);}
+.badge.grey{background:var(--surface-2); color:var(--muted);}
+.badge.blue{background:#1B2C47; color:var(--blue);}
+
+/* ---- Modal ---- */
+.modal-backdrop{
+  position:fixed; inset:0; background:rgba(8,10,13,.65); display:flex; align-items:center; justify-content:center;
+  z-index:100; padding:20px;
+}
+.modal{background:var(--surface); border:1px solid var(--border); border-radius:12px; width:100%; max-width:520px; max-height:88vh; overflow-y:auto;}
+.modal-head{display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border);}
+.modal-head h3{font-size:15px;}
+.modal-close{background:none; border:none; color:var(--muted); font-size:18px;}
+.modal-body{padding:18px 20px; display:grid; gap:12px;}
+.field label{display:block; font-size:11.5px; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:.03em;}
+.field input, .field select, .field textarea{
+  width:100%; background:var(--surface-2); border:1px solid var(--border); color:var(--text);
+  padding:9px 10px; border-radius:7px; font-size:13px; font-family:inherit;
+}
+.field input:focus, .field select:focus, .field textarea:focus{outline:1.5px solid var(--amber);}
+.modal-foot{padding:14px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px;}
+.checkbox-row{display:flex; align-items:center; gap:8px;}
+.checkbox-row input{width:auto;}
+
+/* ---- Dispatch cards ---- */
+.dispatch-grid{display:grid; gap:12px;}
+.dispatch-card{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px;}
+.dispatch-card .row1{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;}
+.dispatch-card h4{font-size:14px;}
+.dispatch-card .meta{color:var(--muted); font-size:12px; margin-top:4px;}
+.match-list{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+.match-chip{
+  border:1px solid var(--border); background:var(--surface-2); border-radius:8px; padding:8px 10px; font-size:12px;
+  display:flex; align-items:center; gap:8px;
+}
+.match-chip .score{color:var(--green); font-family:'IBM Plex Mono',monospace; font-weight:600;}
+.match-chip button{background:var(--amber); color:#12161B; border:none; border-radius:6px; padding:5px 9px; font-size:11px; font-weight:700;}
+
+/* ---- SOP checklist ---- */
+.sop-steps{display:grid; gap:8px; margin-top:10px;}
+.sop-step{display:flex; align-items:flex-start; gap:10px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:10px 12px;}
+.sop-step input{margin-top:2px;}
+.sop-step .txt{font-size:12.5px;}
+.sop-step .txt .evid{color:var(--muted); font-size:11px; margin-top:2px;}
+
+/* ---- Field App ---- */
+.field-frame-wrap{display:flex; justify-content:center; padding:10px 0 40px;}
+.field-frame{
+  width:390px; max-width:100%; background:#0F1318; border:1px solid var(--border); border-radius:26px;
+  padding:16px; box-shadow:0 30px 60px rgba(0,0,0,.4);
+}
+.field-header{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+.field-header select{background:var(--surface-2); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:7px 9px; font-size:12.5px;}
+.field-scorecard{background:linear-gradient(135deg,#1B2128,#20272F); border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:14px;}
+.field-scorecard .name{font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:16px;}
+.field-scorecard .role{color:var(--muted); font-size:11.5px; margin-top:2px;}
+.field-scorecard .stats{display:flex; gap:18px; margin-top:12px;}
+.field-scorecard .stat .n{font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700;}
+.field-scorecard .stat .l{color:var(--muted); font-size:10.5px; text-transform:uppercase; letter-spacing:.04em;}
+.field-tabs{display:flex; gap:6px; margin-bottom:12px;}
+.field-tabs button{flex:1; background:var(--surface); border:1px solid var(--border); color:var(--muted); padding:8px 0; border-radius:8px; font-size:11.5px; font-weight:600;}
+.field-tabs button.active{background:var(--amber); color:#12161B; border-color:var(--amber);}
+.job-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:13px 14px; margin-bottom:10px;}
+.job-card .top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+.job-card h4{font-size:13.5px;}
+.job-card .desc{font-size:12px; color:var(--muted); margin-top:4px;}
+.job-card .actions{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+.job-card .actions button{flex:1; padding:8px 0; border-radius:7px; font-size:12px; font-weight:600; border:1px solid var(--border); background:var(--surface-2); color:var(--text);}
+.job-card .actions button.primary{background:var(--amber); color:#12161B; border-color:var(--amber);}
+.empty-state{text-align:center; padding:40px 10px; color:var(--muted); font-size:12.5px;}
+.empty-state .big{font-size:26px; margin-bottom:8px;}
+
+.detail-modal .sop-steps{max-height:260px; overflow-y:auto;}
+.helptext{font-size:11px; color:var(--muted); margin-top:-4px;}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+@media (max-width:720px){
+  .sidebar{display:none;}
+  .main{padding:16px;}
+  .grid2{grid-template-columns:1fr;}
+}
+.toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--surface-2); border:1px solid var(--amber); color:var(--text); padding:10px 18px; border-radius:8px; font-size:12.5px; z-index:200; box-shadow:0 10px 30px rgba(0,0,0,.4);}
+.loading-note{color:var(--muted); font-size:12.5px; padding:40px; text-align:center;}
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script>
+/* =========================================================
+   BatteryCare OS — data model, storage, and app shell
+   ========================================================= */
+
+/* =========================================================
+   DATABASE CONFIG — REQUIRED BEFORE DEPLOYING
+   =========================================================
+   This app stores all data in a Firebase Realtime Database
+   so every role (Ops, Field, OEM, Customer) sees the same
+   live data, from any device, once hosted on GitHub Pages.
+
+   SETUP (5 minutes, free):
+   1. Go to https://console.firebase.google.com → Add project
+      (you can turn off Google Analytics, not needed).
+   2. In the left menu: Build → Realtime Database → Create Database.
+      Choose a region, then start in "Test mode" (fine for a pilot —
+      lock it down later with proper auth rules before wide rollout).
+   3. Once created, copy the URL shown at the top of the Data tab —
+      it looks like: https://YOUR-PROJECT-default-rtdb.REGION.firebasedatabase.app
+   4. Paste that URL below, replacing FIREBASE_DB_URL's value.
+   5. Save this file and re-upload to GitHub (or just edit the file
+      directly on GitHub and commit).
+
+   Until you do this, the app runs in "local demo mode": it works
+   fully, but nothing is saved between page reloads.
+   ========================================================= */
+const FIREBASE_DB_URL = "https://batterycare-os-default-rtdb.firebaseio.com"; // connected
+const DB_PATH = "batterycare-state";
+const DB_CONFIGURED = !FIREBASE_DB_URL.includes("YOUR-PROJECT");
+
+const LEVEL_RANK = {L1:1, L2:2, L3:3, L4:4};
+
+function seedState(){
+  return {
+    technicians: [
+      {id:"TECH-0001", name:"Arjun Mehta", mobile:"98100 11122", city:"Bengaluru", state:"Karnataka", level:"L2", brands:"Exide, Amaron", voltageClass:"≤96V", specialties:"Battery/BMS", status:"Active", score:88, jobsCompleted:0, fvr:0, payoutAccount:"HDFC ****4521", joinDate:"2026-02-10"},
+      {id:"TECH-0002", name:"Priya Nair", mobile:"98100 22334", city:"Bengaluru", state:"Karnataka", level:"L3", brands:"Exide, Luminous, Livguard", voltageClass:"≤150V", specialties:"BMS/Testing", status:"Active", score:93, jobsCompleted:0, fvr:0, payoutAccount:"ICICI ****7710", joinDate:"2026-01-22"},
+      {id:"TECH-0003", name:"Suresh Rao", mobile:"98100 33445", city:"Chennai", state:"Tamil Nadu", level:"L4", brands:"All Brands", voltageClass:"C&I/BESS", specialties:"BESS/Solar Storage", status:"Active", score:96, jobsCompleted:0, fvr:0, payoutAccount:"SBI ****9081", joinDate:"2025-11-05"}
+    ],
+    oems: [
+      {id:"OEM-0001", brand:"Exide", contact:"Kavita Deshmukh", mobile:"98200 55110", email:"kavita.d@exide-partners.com", citiesCovered:"Bengaluru, Chennai", contractType:"Authorized Service Partner", warrantyRate:850, platformFee:15000, sla:"24 hr", status:"Active"},
+      {id:"OEM-0002", brand:"Amaron", contact:"Rohit Bhatia", mobile:"98200 66221", email:"rohit.b@amaron-service.com", citiesCovered:"Bengaluru", contractType:"Authorized Service Partner", warrantyRate:800, platformFee:12000, sla:"24 hr", status:"Active"}
+    ],
+    catalogue: [
+      {code:"BC-DIAG", name:"Standard Battery Diagnostic", level:"L2", category:"Diagnostics", price:1000, payout:650, travel:0, partsSeparate:"Yes", warrantyEligible:"Yes", sla:"24 hr", active:"Yes"},
+      {code:"BC-ADV", name:"Advanced Battery Diagnostic", level:"L3", category:"Diagnostics", price:1500, payout:900, travel:0, partsSeparate:"Yes", warrantyEligible:"Yes", sla:"24 hr", active:"Yes"},
+      {code:"BC-BMS", name:"BMS Replacement Service", level:"L3", category:"Repair", price:2000, payout:1150, travel:0, partsSeparate:"Yes", warrantyEligible:"Yes", sla:"48 hr", active:"Yes"},
+      {code:"BC-HEALTH", name:"Battery Health Test", level:"L3", category:"Testing", price:1500, payout:900, travel:0, partsSeparate:"Yes", warrantyEligible:"Yes", sla:"48 hr", active:"Yes"},
+      {code:"BC-INSTALL", name:"Battery Installation & Commissioning", level:"L2", category:"Installation", price:1500, payout:900, travel:0, partsSeparate:"Yes", warrantyEligible:"Yes", sla:"48 hr", active:"Yes"},
+      {code:"BC-AMC", name:"AMC Preventive Visit", level:"L3", category:"AMC", price:1200, payout:700, travel:0, partsSeparate:"Yes", warrantyEligible:"Yes", sla:"Scheduled", active:"Yes"},
+      {code:"BC-BESS", name:"BESS Specialist Visit", level:"L4", category:"BESS", price:5000, payout:3000, travel:0, partsSeparate:"Yes", warrantyEligible:"Yes", sla:"24 hr", active:"Yes"},
+      {code:"BC-ROC", name:"Remote Diagnostic Case", level:"L3", category:"Remote", price:500, payout:250, travel:0, partsSeparate:"No", warrantyEligible:"Yes", sla:"4 hr", active:"Yes"}
+    ],
+    jobs: [
+      {id:"BC-2026-0001", date:"2026-08-15", customer:"Ramesh Iyer", mobile:"90000 11111", city:"Bengaluru", brand:"Exide", model:"EX-150AH", serial:"EX2026009981", complaint:"Battery not charging", serviceCode:"BC-DIAG", warranty:"Check", priority:"P2", requiredLevel:"L2", assignedTech:"", status:"Unassigned", quoted:1000, collected:0, techPayout:0, partsCost:0, rootCause:"", closureDate:"", rating:0, sop:{}, source:"Ops", oemId:"", callbackRequestedAt:""}
+    ],
+    warranty: [],
+    payouts: [],
+    batteries: [],
+    parts: [
+      {code:"PT-BMS-01", name:"BMS Controller Board", brand:"Exide", category:"BMS", cost:1400, sellPrice:1900, stock:12, reorder:5, supplier:"Exide Spares Hub", active:"Yes"},
+      {code:"PT-CELL-12V", name:"12V Cell Module", brand:"Amaron", category:"Cell", cost:2200, sellPrice:2900, stock:6, reorder:8, supplier:"Amaron Direct", active:"Yes"}
+    ],
+    sop: [
+      {id:"SOP-01", process:"Customer Service", step:1, owner:"Operations", mandatory:"Yes", evidence:"Service request logged"},
+      {id:"SOP-01", process:"Customer Service", step:2, owner:"Operations", mandatory:"Yes", evidence:"Triage + warranty check"},
+      {id:"SOP-01", process:"Dispatch", step:3, owner:"Dispatcher", mandatory:"Yes", evidence:"Eligible technician selected"},
+      {id:"SOP-01", process:"Field Service", step:4, owner:"Technician", mandatory:"Yes", evidence:"Safety checklist"},
+      {id:"SOP-01", process:"Field Service", step:5, owner:"Technician", mandatory:"Yes", evidence:"Diagnostic readings/photos"},
+      {id:"SOP-01", process:"Repair", step:6, owner:"Technician", mandatory:"Yes", evidence:"Customer approval + parts record"},
+      {id:"SOP-01", process:"Validation", step:7, owner:"Technician", mandatory:"Yes", evidence:"Before/after test evidence"},
+      {id:"SOP-01", process:"Closure", step:8, owner:"Operations", mandatory:"Yes", evidence:"Customer signature + report"},
+      {id:"SOP-02", process:"Warranty", step:1, owner:"Warranty Desk", mandatory:"Yes", evidence:"Eligibility + evidence"},
+      {id:"SOP-02", process:"Warranty", step:2, owner:"OEM", mandatory:"Yes", evidence:"Approval/rejection record"},
+      {id:"SOP-02", process:"Warranty", step:3, owner:"Operations", mandatory:"Yes", evidence:"Claim submitted/closed"}
+    ]
+  };
+}
+
+let state = null;
+let dbStatus = DB_CONFIGURED ? "connecting" : "unconfigured"; // unconfigured | connecting | connected | error
+let ui = {
+  role: "field",              // ops | field | oem | customer — field is primary: the service engineer completing jobs
+  opsTab: "dashboard",
+  fieldTechId: null,
+  fieldTab: "jobs",
+  oemId: null,
+  oemTab: "report",
+  customerTab: "report",
+  customerMobile: "",
+  customerLookup: "",
+  modal: null,               // {type:'entity'|'assign'|'jobDetail', entityKey, recordId}
+  toast: null
+};
+
+async function loadState(){
+  if(!DB_CONFIGURED){
+    dbStatus = "unconfigured";
+    return seedState(); // local demo mode — nothing persists between reloads
+  }
+  try{
+    const res = await fetch(`${FIREBASE_DB_URL}/${DB_PATH}.json`);
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    dbStatus = "connected";
+    if(data){ return data; }
+    // nothing saved yet — seed the database
+    const seeded = seedState();
+    await fetch(`${FIREBASE_DB_URL}/${DB_PATH}.json`, {
+      method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(seeded)
+    });
+    return seeded;
+  }catch(e){
+    dbStatus = "error";
+    return seedState(); // fall back to local demo mode so the app still works
+  }
+}
+async function saveState(){
+  if(!DB_CONFIGURED) return; // local demo mode — nothing to save to
+  try{
+    const res = await fetch(`${FIREBASE_DB_URL}/${DB_PATH}.json`, {
+      method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify(state)
+    });
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    dbStatus = "connected";
+  }catch(e){
+    dbStatus = "error";
+    showToast("Save failed — check your database connection.");
+  }
+}
+function showToast(msg){
+  ui.toast = msg;
+  render();
+  setTimeout(()=>{ ui.toast=null; render(); }, 2400);
+}
+let pendingConfirm = null;
+function askConfirm(message, onYes){
+  pendingConfirm = onYes;
+  ui.modal = {type:"confirm", message};
+  render();
+}
+
+/* ---------- helpers ---------- */
+function nextId(prefix, arr, field){
+  let n = 1;
+  arr.forEach(r=>{
+    const m = String(r[field]||"").match(/(\d+)$/);
+    if(m){ n = Math.max(n, parseInt(m[1],10)+1); }
+  });
+  return prefix + String(n).padStart(4,"0");
+}
+function fmtMoney(n){ return "₹" + Number(n||0).toLocaleString("en-IN"); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function gaugeHTML(pct, cells=10){
+  pct = Math.max(0, Math.min(100, Number(pct)||0));
+  const on = Math.round((pct/100)*cells);
+  const cls = pct>=70?"on-green":(pct>=40?"on-amber":"on-red");
+  let html = '<div class="gauge"><div class="cells">';
+  for(let i=0;i<cells;i++){ html += `<div class="cell ${i<on?cls:''}"></div>`; }
+  html += `</div><span class="pct mono">${pct}%</span></div>`;
+  return html;
+}
+function statusBadge(status){
+  const map = {
+    "Unassigned":"red","Assigned":"blue","In Progress":"amber","Completed":"green","Closed":"grey",
+    "Active":"green","Inactive":"grey","Pending":"amber","Approved":"green","Rejected":"red","Paid":"green"
+  };
+  return `<span class="badge ${map[status]||'grey'}">${esc(status)}</span>`;
+}
+
+/* ---------- entity configs for generic CRUD ---------- */
+const ENTITY = {
+  technicians:{
+    label:"Technician", idPrefix:"TECH-", idField:"id",
+    columns:[["id","ID"],["name","Name"],["city","City"],["level","Level"],["brands","Brands"],["specialties","Specialties"],["status","Status"],["score","Score"]],
+    fields:[
+      {key:"name",label:"Name",type:"text"},
+      {key:"mobile",label:"Mobile",type:"text"},
+      {key:"city",label:"City",type:"text"},
+      {key:"state",label:"State",type:"text"},
+      {key:"level",label:"BCSP Level",type:"select",options:["L1","L2","L3","L4"]},
+      {key:"brands",label:"Brands Authorized",type:"text"},
+      {key:"voltageClass",label:"Voltage Class",type:"text"},
+      {key:"specialties",label:"Specialties",type:"text"},
+      {key:"status",label:"Status",type:"select",options:["Active","Inactive"]},
+      {key:"score",label:"Score %",type:"number"},
+      {key:"payoutAccount",label:"Payout Account",type:"text"},
+      {key:"joinDate",label:"Join Date",type:"date"}
+    ]
+  },
+  oems:{
+    label:"OEM / Brand", idPrefix:"OEM-", idField:"id",
+    columns:[["id","ID"],["brand","Brand"],["contact","Contact"],["citiesCovered","Cities"],["contractType","Contract"],["sla","SLA"],["status","Status"]],
+    fields:[
+      {key:"brand",label:"Brand",type:"text"},
+      {key:"contact",label:"Contact Person",type:"text"},
+      {key:"mobile",label:"Mobile",type:"text"},
+      {key:"email",label:"Email",type:"text"},
+      {key:"citiesCovered",label:"Cities Covered",type:"text"},
+      {key:"contractType",label:"Contract Type",type:"text"},
+      {key:"warrantyRate",label:"Warranty Rate ₹",type:"number"},
+      {key:"platformFee",label:"Platform Fee ₹/Month",type:"number"},
+      {key:"sla",label:"SLA",type:"text"},
+      {key:"status",label:"Status",type:"select",options:["Active","Inactive"]}
+    ]
+  },
+  warranty:{
+    label:"Warranty Claim", idPrefix:"WC-", idField:"id",
+    columns:[["id","Claim ID"],["jobId","Job"],["brand","Brand"],["warrantyStatus","Status"],["oemApproval","OEM Approval"],["claimAmount","Amount"],["status","Claim Status"]],
+    fields:[
+      {key:"jobId",label:"Job ID",type:"text"},
+      {key:"brand",label:"Brand",type:"text"},
+      {key:"serial",label:"Serial No.",type:"text"},
+      {key:"warrantyStatus",label:"Warranty Status",type:"select",options:["Check","Confirmed","Denied"]},
+      {key:"evidenceComplete",label:"Evidence Complete?",type:"select",options:["Yes","No"]},
+      {key:"oemApproval",label:"OEM Approval",type:"select",options:["Pending","Approved","Rejected"]},
+      {key:"repairReplace",label:"Repair/Replace",type:"select",options:["Repair","Replace"]},
+      {key:"claimAmount",label:"Claim Amount ₹",type:"number"},
+      {key:"submittedDate",label:"Submitted Date",type:"date"},
+      {key:"approvedDate",label:"Approved Date",type:"date"},
+      {key:"status",label:"Status",type:"select",options:["Open","Closed"]}
+    ]
+  },
+  batteries:{
+    label:"Battery Passport", idPrefix:"BAT-", idField:"id",
+    columns:[["id","Battery ID"],["brand","Brand"],["model","Model"],["customer","Customer"],["soh","SOH %"],["risk","Risk"],["openIssue","Open Issue"]],
+    fields:[
+      {key:"brand",label:"Brand",type:"text"},
+      {key:"model",label:"Model",type:"text"},
+      {key:"serial",label:"Serial No.",type:"text"},
+      {key:"chemistry",label:"Chemistry",type:"text"},
+      {key:"voltage",label:"Nominal Voltage",type:"text"},
+      {key:"capacity",label:"Capacity Ah",type:"number"},
+      {key:"installDate",label:"Install Date",type:"date"},
+      {key:"customer",label:"Customer",type:"text"},
+      {key:"site",label:"Site",type:"text"},
+      {key:"soh",label:"SOH %",type:"number"},
+      {key:"cellDelta",label:"Cell Delta mV",type:"number"},
+      {key:"tempMax",label:"Temp Max °C",type:"number"},
+      {key:"risk",label:"Risk Level",type:"select",options:["Low","Medium","High"]},
+      {key:"openIssue",label:"Open Issue",type:"text"}
+    ]
+  },
+  parts:{
+    label:"Part", idPrefix:"PT-", idField:"code",
+    columns:[["code","Code"],["name","Name"],["brand","Brand"],["cost","Cost"],["sellPrice","Sell Price"],["stock","Stock"],["reorder","Reorder Lvl"]],
+    fields:[
+      {key:"name",label:"Part Name",type:"text"},
+      {key:"brand",label:"Brand",type:"text"},
+      {key:"category",label:"Category",type:"text"},
+      {key:"cost",label:"Cost ₹",type:"number"},
+      {key:"sellPrice",label:"Sell Price ₹",type:"number"},
+      {key:"stock",label:"Stock",type:"number"},
+      {key:"reorder",label:"Reorder Level",type:"number"},
+      {key:"supplier",label:"Supplier",type:"text"},
+      {key:"active",label:"Active",type:"select",options:["Yes","No"]}
+    ]
+  }
+};
+
+function openAddModal(entityKey){ ui.modal = {type:"entity", entityKey, recordId:null}; render(); }
+function openEditModal(entityKey, id){ ui.modal = {type:"entity", entityKey, recordId:id}; render(); }
+function closeModal(){ ui.modal = null; render(); }
+
+function saveEntity(entityKey, formData, recordId){
+  const cfg = ENTITY[entityKey];
+  const arr = state[entityKey];
+  if(recordId){
+    const idx = arr.findIndex(r=>r[cfg.idField]===recordId);
+    if(idx>-1) arr[idx] = {...arr[idx], ...formData};
+  }else{
+    const id = nextId(cfg.idPrefix, arr, cfg.idField);
+    const rec = {[cfg.idField]:id, ...formData};
+    arr.push(rec);
+  }
+  saveState(); closeModal(); showToast("Saved.");
+}
+function deleteEntity(entityKey, id){
+  const cfg = ENTITY[entityKey];
+  state[entityKey] = state[entityKey].filter(r=>r[cfg.idField]!==id);
+  saveState(); render(); showToast("Deleted.");
+}
+
+/* ---------- Job lifecycle logic ---------- */
+function catalogueFor(code){ return state.catalogue.find(c=>c.code===code); }
+function techFor(id){ return state.technicians.find(t=>t.id===id); }
+
+function eligibleTechs(job){
+  return state.technicians.filter(t=>{
+    if(t.status!=="Active") return false;
+    if((LEVEL_RANK[t.level]||0) < (LEVEL_RANK[job.requiredLevel]||0)) return false;
+    if(t.city && job.city && t.city!==job.city) return false;
+    if(t.brands && t.brands!=="All Brands" && job.brand && !t.brands.toLowerCase().includes(job.brand.toLowerCase())) return false;
+    return true;
+  }).sort((a,b)=> b.score - a.score);
+}
+function assignJob(jobId, techId){
+  const job = state.jobs.find(j=>j.id===jobId);
+  if(!job) return;
+  job.assignedTech = techId;
+  job.status = "Assigned";
+  saveState(); render(); showToast(`Assigned ${techId} to ${jobId}.`);
+}
+function advanceJobStatus(jobId, newStatus){
+  const job = state.jobs.find(j=>j.id===jobId);
+  if(!job) return;
+  job.status = newStatus;
+  if(newStatus==="Completed" || newStatus==="Closed"){
+    job.closureDate = job.closureDate || new Date().toISOString().slice(0,10);
+    generatePayout(job);
+    bumpTechStats(job);
+  }
+  saveState(); render();
+}
+function generatePayout(job){
+  if(state.payouts.some(p=>p.jobId===job.id)) return; // already generated
+  const cat = catalogueFor(job.serviceCode);
+  const base = cat ? cat.payout : 0;
+  const travel = cat ? cat.travel : 0;
+  const partsHandling = Math.round((Number(job.partsCost)||0) * 0.10);
+  const bonus = job.rating>=5 ? 100 : 0;
+  const penalty = 0;
+  const total = base+travel+partsHandling+bonus-penalty;
+  job.techPayout = total;
+  const id = nextId("PAY-", state.payouts, "id");
+  state.payouts.push({
+    id, jobId:job.id, techId:job.assignedTech, serviceCode:job.serviceCode,
+    base, travel, partsHandling, bonus, penalty, total, approval:"Pending", paidDate:""
+  });
+}
+function bumpTechStats(job){
+  const t = techFor(job.assignedTech);
+  if(t){ t.jobsCompleted = (t.jobsCompleted||0)+1; }
+}
+function markPayoutPaid(payoutId){
+  const p = state.payouts.find(x=>x.id===payoutId);
+  if(!p) return;
+  p.approval="Approved"; p.paidDate = new Date().toISOString().slice(0,10);
+  saveState(); render(); showToast("Payout marked paid.");
+}
+
+/* ---------- KPI computation ---------- */
+function computeKPIs(){
+  const jobs = state.jobs;
+  const totalJobs = jobs.length;
+  const completed = jobs.filter(j=>j.status==="Completed"||j.status==="Closed").length;
+  const revenue = jobs.reduce((s,j)=>s+(Number(j.collected)||0),0);
+  const techPayout = state.payouts.reduce((s,p)=>s+(Number(p.total)||0),0);
+  const partsCost = jobs.reduce((s,j)=>s+(Number(j.partsCost)||0),0);
+  const gross = revenue - techPayout - partsCost;
+  const avgRev = completed ? Math.round(revenue/completed) : 0;
+  const activeTechs = state.technicians.filter(t=>t.status==="Active").length;
+  const ratedJobs = jobs.filter(j=>j.rating>0);
+  const avgRating = ratedJobs.length ? (ratedJobs.reduce((s,j)=>s+Number(j.rating),0)/ratedJobs.length).toFixed(1) : "—";
+  return {totalJobs, completed, revenue, techPayout, partsCost, gross, avgRev, activeTechs,
+    oemAccounts: state.oems.length, batteries: state.batteries.length, avgRating};
+}
+
+/* =========================================================
+   RENDER
+   ========================================================= */
+function render(){
+  const root = document.getElementById("root");
+  root.innerHTML = `
+    ${renderTopbar()}
+    <div class="layout">
+      ${ui.role==="ops" ? renderOpsSidebar() + renderOpsMain() : `<div class="main">${ui.role==='field' ? renderFieldApp() : (ui.role==='oem' ? renderOemPanel() : renderCustomerPanel())}</div>`}
+    </div>
+    ${ui.modal ? renderModal() : ""}
+    ${ui.toast ? `<div class="toast">${esc(ui.toast)}</div>` : ""}
+  `;
+  attachHandlers();
+}
+
+function renderTopbar(){
+  const statusMap = {
+    connected: {cls:"green", label:"Database connected"},
+    connecting: {cls:"amber", label:"Connecting…"},
+    unconfigured: {cls:"red", label:"Local demo mode — no database configured"},
+    error: {cls:"red", label:"Database unreachable — check FIREBASE_DB_URL"}
+  };
+  const s = statusMap[dbStatus] || statusMap.unconfigured;
+  return `
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark"><span></span><span></span><span></span><span></span></div>
+      <div>
+        <div class="brand-title">BatteryCare <span style="color:var(--amber)">OS</span></div>
+        <div class="brand-sub">Train → Certify → Authorize → Dispatch → Service → Verify → Pay → Learn</div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <div class="gauge" title="${s.label}" style="gap:6px;">
+        <span class="badge ${s.cls}" style="padding:4px 5px; border-radius:50%; width:6px; height:6px; display:inline-block;"></span>
+        <span style="font-size:11px; color:var(--muted);">${s.label}</span>
+      </div>
+      <div class="role-toggle">
+        <button data-role="field" class="${ui.role==='field'?'active':''}">Field App</button>
+        <button data-role="customer" class="${ui.role==='customer'?'active':''}">Customer Panel</button>
+        <button data-role="oem" class="${ui.role==='oem'?'active':''}">OEM Panel</button>
+        <button data-role="ops" class="${ui.role==='ops'?'active':''}">Ops Console</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+const OPS_TABS = [
+  ["dashboard","Dashboard"],
+  ["jobs","Job Register"],
+  ["dispatch","Dispatch Board"],
+  ["technicians","Technicians"],
+  ["oems","OEM Master"],
+  ["catalogue","Service Catalogue"],
+  ["warranty","Warranty"],
+  ["payouts","Technician Payout"],
+  ["batteries","Battery Passport"],
+  ["parts","Parts Register"],
+  ["sop","SOP Checklist"]
+];
+function renderOpsSidebar(){
+  return `<div class="sidebar">
+    <div class="grp-label">Control Tower</div>
+    ${OPS_TABS.slice(0,1).map(tabBtn).join("")}
+    <div class="grp-label">Operations</div>
+    ${OPS_TABS.slice(1,3).map(tabBtn).join("")}
+    <div class="grp-label">Network</div>
+    ${OPS_TABS.slice(3,6).map(tabBtn).join("")}
+    <div class="grp-label">Assurance</div>
+    ${OPS_TABS.slice(6,8).map(tabBtn).join("")}
+    <div class="grp-label">Assets</div>
+    ${OPS_TABS.slice(8,10).map(tabBtn).join("")}
+    <div class="grp-label">Playbook</div>
+    ${OPS_TABS.slice(10,11).map(tabBtn).join("")}
+  </div>`;
+}
+function tabBtn([key,label]){
+  return `<button data-tab="${key}" class="${ui.opsTab===key?'active':''}"><span class="dot"></span>${label}</button>`;
+}
+function renderOpsMain(){
+  let body = "";
+  switch(ui.opsTab){
+    case "dashboard": body = renderDashboard(); break;
+    case "jobs": body = renderJobs(); break;
+    case "dispatch": body = renderDispatch(); break;
+    case "technicians": body = renderGenericTable("technicians"); break;
+    case "oems": body = renderGenericTable("oems"); break;
+    case "catalogue": body = renderCatalogue(); break;
+    case "warranty": body = renderGenericTable("warranty"); break;
+    case "payouts": body = renderPayouts(); break;
+    case "batteries": body = renderGenericTable("batteries"); break;
+    case "parts": body = renderGenericTable("parts"); break;
+    case "sop": body = renderSOP(); break;
+  }
+  return `<div class="main">${body}</div>`;
+}
+
+function renderDashboard(){
+  const k = computeKPIs();
+  const overdue = state.jobs.filter(j=>j.status!=="Completed" && j.status!=="Closed").length;
+  return `
+  <div class="page-head">
+    <div><h2>Weekly Control Tower</h2><p>Live metrics computed from your Job Register and Payout ledger.</p></div>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="lbl">Total Jobs</div><div class="val">${k.totalJobs}</div></div>
+    <div class="kpi-card"><div class="lbl">Completed Jobs</div><div class="val">${k.completed}</div><div class="sub">${overdue} still open</div></div>
+    <div class="kpi-card"><div class="lbl">Revenue Collected</div><div class="val">${fmtMoney(k.revenue)}</div></div>
+    <div class="kpi-card"><div class="lbl">Technician Payout</div><div class="val">${fmtMoney(k.techPayout)}</div></div>
+    <div class="kpi-card"><div class="lbl">Parts Cost</div><div class="val">${fmtMoney(k.partsCost)}</div></div>
+    <div class="kpi-card"><div class="lbl">Gross Contribution</div><div class="val">${fmtMoney(k.gross)}</div></div>
+    <div class="kpi-card"><div class="lbl">Avg. Revenue / Job</div><div class="val">${fmtMoney(k.avgRev)}</div></div>
+    <div class="kpi-card"><div class="lbl">Active Technicians</div><div class="val">${k.activeTechs}</div></div>
+    <div class="kpi-card"><div class="lbl">OEM / Brand Accounts</div><div class="val">${k.oemAccounts}</div></div>
+    <div class="kpi-card"><div class="lbl">Batteries Under Mgmt</div><div class="val">${k.batteries}</div></div>
+    <div class="kpi-card"><div class="lbl">Avg. Customer Rating</div><div class="val">${k.avgRating}${k.avgRating!=="—"?" / 5":""}</div></div>
+  </div>
+
+  <h3 style="margin-bottom:10px;">Technician standing</h3>
+  <div class="table-wrap" style="margin-bottom:24px;">
+    <table>
+      <thead><tr><th>Technician</th><th>City</th><th>Level</th><th>Score</th><th>Jobs Completed</th></tr></thead>
+      <tbody>
+        ${state.technicians.map(t=>`
+          <tr><td>${esc(t.name)}</td><td>${esc(t.city)}</td><td>${esc(t.level)}</td>
+          <td>${gaugeHTML(t.score)}</td><td>${t.jobsCompleted||0}</td></tr>`).join("") || emptyRow(5)}
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-bottom:10px;">Weekly management questions</h3>
+  <div class="table-wrap">
+    <table>
+      <tbody>
+        <tr><td>Which jobs are overdue?</td><td class="mono">${overdue} open (see Job Register)</td></tr>
+        <tr><td>Which technicians have repeat failures?</td><td class="mono">Review Battery Passport → Open Issue</td></tr>
+        <tr><td>Which brands generate the most warranty cases?</td><td class="mono">${state.warranty.length} claims on file</td></tr>
+        <tr><td>What is contribution per job?</td><td class="mono">${fmtMoney(k.completed? Math.round(k.gross/k.completed):0)}</td></tr>
+        <tr><td>Where are coverage gaps?</td><td class="mono">Check Dispatch Board for unmatched jobs</td></tr>
+        <tr><td>Which battery models show recurring faults?</td><td class="mono">Review Battery Passport risk levels</td></tr>
+        <tr><td>Which jobs await OEM approval?</td><td class="mono">${state.warranty.filter(w=>w.oemApproval==="Pending").length} pending</td></tr>
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function renderJobs(){
+  const rows = state.jobs.map(j=>`
+    <tr>
+      <td class="id-cell">${j.id}</td>
+      <td>${esc(j.date)}</td>
+      <td>${esc(j.customer)}</td>
+      <td>${esc(j.city)}</td>
+      <td>${esc(j.brand)}</td>
+      <td>${esc(j.complaint)}</td>
+      <td class="mono">${esc(j.serviceCode)}</td>
+      <td>${esc(j.priority)}</td>
+      <td>${j.source==="OEM" ? `<span class="badge blue">OEM</span>` : (j.source==="Customer" ? `<span class="badge green">Customer</span>` : `<span class="badge grey">Ops</span>`)}${j.callbackRequestedAt ? ` <span class="badge amber" title="OEM requested a callback">☎</span>` : ""}</td>
+      <td>${esc(j.assignedTech)||"—"}</td>
+      <td>${statusBadge(j.status)}</td>
+      <td>${fmtMoney(j.collected)}</td>
+      <td>
+        <button class="btn small secondary" data-job-detail="${j.id}">Open</button>
+        <button class="btn small danger" data-del-job="${j.id}">Del</button>
+      </td>
+    </tr>`).join("");
+  return `
+  <div class="page-head">
+    <div><h2>Job Register</h2><p>The single source of truth for every service job, from intake to closure.</p></div>
+    <button class="btn" data-add-job="1">+ New Job</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Job ID</th><th>Date</th><th>Customer</th><th>City</th><th>Brand</th><th>Complaint</th><th>Service</th><th>Priority</th><th>Source</th><th>Tech</th><th>Status</th><th>Collected</th><th></th></tr></thead>
+      <tbody>${rows || emptyRow(13)}</tbody>
+    </table>
+  </div>`;
+}
+
+function renderDispatch(){
+  const open = state.jobs.filter(j=>j.status==="Unassigned");
+  if(!open.length){
+    return `<div class="page-head"><div><h2>Dispatch Board</h2><p>Match unassigned jobs to eligible technicians.</p></div></div>
+    <div class="empty-state"><div class="big">✓</div>Nothing waiting on dispatch. Every job has a technician assigned.</div>`;
+  }
+  return `
+  <div class="page-head"><div><h2>Dispatch Board</h2><p>Match unassigned jobs to eligible technicians by level, city and brand.</p></div></div>
+  <div class="dispatch-grid">
+    ${open.map(j=>{
+      const matches = eligibleTechs(j);
+      return `
+      <div class="dispatch-card">
+        <div class="row1">
+          <div>
+            <h4 class="mono">${j.id} — ${esc(j.complaint)}</h4>
+            <div class="meta">${esc(j.city)} · ${esc(j.brand)} · Requires ${esc(j.requiredLevel)} · Priority ${esc(j.priority)} · ${esc(j.serviceCode)}</div>
+          </div>
+          ${statusBadge(j.status)}
+        </div>
+        <div class="match-list">
+          ${matches.length ? matches.map(t=>`
+            <div class="match-chip">
+              <span>${esc(t.name)} (${esc(t.level)}, ${esc(t.city)})</span>
+              <span class="score">${t.score}%</span>
+              <button data-assign="${j.id}|${t.id}">Assign</button>
+            </div>`).join("") : `<span class="helptext">No eligible technician found for this job's level/city/brand.</span>`}
+        </div>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
+function renderCatalogue(){
+  const rows = state.catalogue.map(c=>`
+    <tr>
+      <td class="id-cell">${c.code}</td><td>${esc(c.name)}</td><td>${esc(c.level)}</td><td>${esc(c.category)}</td>
+      <td>${fmtMoney(c.price)}</td><td>${fmtMoney(c.payout)}</td><td>${esc(c.sla)}</td>
+      <td>${statusBadge(c.active==="Yes"?"Active":"Inactive")}</td>
+    </tr>`).join("");
+  return `
+  <div class="page-head"><div><h2>Service Catalogue</h2><p>Standard pricing and technician payouts by service type.</p></div></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Code</th><th>Service</th><th>Level</th><th>Category</th><th>Customer Price</th><th>Tech Payout</th><th>SLA</th><th>Active</th></tr></thead>
+    <tbody>${rows || emptyRow(8)}</tbody>
+  </table></div>`;
+}
+
+function renderPayouts(){
+  const rows = state.payouts.map(p=>`
+    <tr>
+      <td class="id-cell">${p.id}</td><td class="mono">${p.jobId}</td><td>${esc(techFor(p.techId)?.name||p.techId||"—")}</td>
+      <td>${esc(p.serviceCode)}</td><td>${fmtMoney(p.base)}</td><td>${fmtMoney(p.partsHandling)}</td><td>${fmtMoney(p.bonus)}</td>
+      <td><strong>${fmtMoney(p.total)}</strong></td><td>${statusBadge(p.approval==="Approved"?"Paid":"Pending")}</td>
+      <td>${p.approval!=="Approved" ? `<button class="btn small" data-pay="${p.id}">Mark Paid</button>` : (p.paidDate||"—")}</td>
+    </tr>`).join("");
+  return `
+  <div class="page-head"><div><h2>Technician Payout</h2><p>Auto-generated when a job is marked Completed. Approve to release payment.</p></div></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Payout ID</th><th>Job</th><th>Technician</th><th>Service</th><th>Base</th><th>Parts %</th><th>Bonus</th><th>Total</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows || emptyRow(10)}</tbody>
+  </table></div>`;
+}
+
+function renderSOP(){
+  const groups = {};
+  state.sop.forEach(s=>{ (groups[s.id] = groups[s.id]||[]).push(s); });
+  return `
+  <div class="page-head"><div><h2>SOP Checklist</h2><p>The mandatory evidence trail for every job and warranty claim.</p></div></div>
+  ${Object.entries(groups).map(([id,steps])=>`
+    <h3 style="margin:18px 0 10px;">${id}</h3>
+    <div class="table-wrap" style="margin-bottom:18px;">
+      <table>
+        <thead><tr><th>Step</th><th>Process</th><th>Owner</th><th>Mandatory</th><th>Evidence Required</th></tr></thead>
+        <tbody>${steps.map(s=>`<tr><td class="mono">${s.step}</td><td>${esc(s.process)}</td><td>${esc(s.owner)}</td><td>${statusBadge(s.mandatory==="Yes"?"Active":"Inactive")}</td><td>${esc(s.evidence)}</td></tr>`).join("")}</tbody>
+      </table>
+    </div>`).join("")}`;
+}
+
+function renderGenericTable(key){
+  const cfg = ENTITY[key];
+  const rows = state[key].map(r=>`
+    <tr>
+      ${cfg.columns.map(([k])=> k==="score" ? `<td>${gaugeHTML(r[k])}</td>` : (k==="soh" ? `<td>${gaugeHTML(r[k])}</td>` : `<td class="${k===cfg.idField?'id-cell':''}">${esc(r[k])}</td>`)).join("")}
+      <td>
+        <button class="btn small secondary" data-edit="${key}|${r[cfg.idField]}">Edit</button>
+        <button class="btn small danger" data-delete="${key}|${r[cfg.idField]}">Del</button>
+      </td>
+    </tr>`).join("");
+  return `
+  <div class="page-head">
+    <div><h2>${cfg.label}${cfg.label.endsWith('s')?'':'s'==='' ? '' : ''} Register</h2><p>Manage ${cfg.label.toLowerCase()} records.</p></div>
+    <button class="btn" data-add="${key}">+ Add ${cfg.label}</button>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr>${cfg.columns.map(([,l])=>`<th>${l}</th>`).join("")}<th></th></tr></thead>
+    <tbody>${rows || emptyRow(cfg.columns.length+1)}</tbody>
+  </table></div>`;
+}
+function emptyRow(colspan){ return `<tr class="empty-row"><td colspan="${colspan}">No records yet — add the first one.</td></tr>`; }
+
+/* ---------- Modal renderers ---------- */
+function renderModal(){
+  if(ui.modal.type==="entity") return renderEntityModal();
+  if(ui.modal.type==="job") return renderJobModal();
+  if(ui.modal.type==="jobDetail") return renderJobDetailModal();
+  if(ui.modal.type==="fieldComplete") return renderFieldCompleteModal();
+  if(ui.modal.type==="confirm") return renderConfirmModal();
+  return "";
+}
+function renderConfirmModal(){
+  return `
+  <div class="modal-backdrop" data-close-modal="1">
+    <div class="modal" data-stop="1" style="max-width:380px;">
+      <div class="modal-head"><h3>Please confirm</h3><button class="modal-close" data-close-modal="1">✕</button></div>
+      <div class="modal-body"><div>${esc(ui.modal.message)}</div></div>
+      <div class="modal-foot">
+        <button class="btn secondary" data-close-modal="1">Cancel</button>
+        <button class="btn danger" data-confirm-yes="1">Delete</button>
+      </div>
+    </div>
+  </div>`;
+}
+function renderFieldCompleteModal(){
+  const job = state.jobs.find(j=>j.id===ui.modal.recordId);
+  if(!job) return "";
+  const sopSteps = state.sop.filter(s=>s.id==="SOP-01");
+  const allChecked = sopSteps.every(s=>job.sop && job.sop[s.step]);
+  return `
+  <div class="modal-backdrop" data-close-modal="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>Complete Job <span class="mono">${job.id}</span></h3><button class="modal-close" data-close-modal="1">✕</button></div>
+      <div class="modal-body">
+        ${!allChecked ? `<div class="helptext" style="color:var(--amber);">Heads up: not all SOP checklist steps are marked done yet. You can still complete, but try to finish the checklist first.</div>` : ""}
+        <div class="field"><label>Amount collected from customer (₹)</label><input type="number" id="fcCollected" value="${job.collected||0}"></div>
+        <div class="field"><label>Parts used — cost (₹)</label><input type="number" id="fcParts" value="${job.partsCost||0}"></div>
+        <div class="field"><label>Root cause</label><input type="text" id="fcRootCause" value="${esc(job.rootCause)}" placeholder="e.g. Corroded BMS connector"></div>
+        <div class="field"><label>Customer rating (1–5)</label><input type="number" min="1" max="5" id="fcRating" value="${job.rating||5}"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn secondary" data-close-modal="1">Cancel</button>
+        <button class="btn" data-save-field-complete="${job.id}">Mark Completed</button>
+      </div>
+    </div>
+  </div>`;
+}
+function renderEntityModal(){
+  const {entityKey, recordId} = ui.modal;
+  const cfg = ENTITY[entityKey];
+  const rec = recordId ? state[entityKey].find(r=>r[cfg.idField]===recordId) : {};
+  return `
+  <div class="modal-backdrop" data-close-modal="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>${recordId?"Edit":"Add"} ${cfg.label}</h3><button class="modal-close" data-close-modal="1">✕</button></div>
+      <form id="entityForm" class="modal-body">
+        ${cfg.fields.map(f=>`
+          <div class="field">
+            <label>${f.label}</label>
+            ${f.type==="select"
+              ? `<select name="${f.key}">${f.options.map(o=>`<option value="${o}" ${rec[f.key]===o?'selected':''}>${o}</option>`).join("")}</select>`
+              : `<input type="${f.type}" name="${f.key}" value="${esc(rec[f.key])}">`}
+          </div>`).join("")}
+      </form>
+      <div class="modal-foot">
+        <button class="btn secondary" data-close-modal="1">Cancel</button>
+        <button class="btn" data-save-entity="${entityKey}|${recordId||''}">Save</button>
+      </div>
+    </div>
+  </div>`;
+}
+function renderJobModal(){
+  const catOpts = state.catalogue.map(c=>`<option value="${c.code}">${c.code} — ${c.name}</option>`).join("");
+  return `
+  <div class="modal-backdrop" data-close-modal="1">
+    <div class="modal" data-stop="1">
+      <div class="modal-head"><h3>New Job</h3><button class="modal-close" data-close-modal="1">✕</button></div>
+      <form id="jobForm" class="modal-body">
+        <div class="grid2">
+          <div class="field"><label>Date</label><input type="date" name="date" value="${new Date().toISOString().slice(0,10)}"></div>
+          <div class="field"><label>Priority</label><select name="priority"><option>P1</option><option selected>P2</option><option>P3</option></select></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>Customer</label><input type="text" name="customer"></div>
+          <div class="field"><label>Mobile</label><input type="text" name="mobile"></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>City</label><input type="text" name="city"></div>
+          <div class="field"><label>Brand</label><input type="text" name="brand"></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>Battery Model</label><input type="text" name="model"></div>
+          <div class="field"><label>Serial No.</label><input type="text" name="serial"></div>
+        </div>
+        <div class="field"><label>Complaint</label><input type="text" name="complaint"></div>
+        <div class="grid2">
+          <div class="field"><label>Service Code</label><select name="serviceCode">${catOpts}</select></div>
+          <div class="field"><label>Required Level</label><select name="requiredLevel"><option>L1</option><option selected>L2</option><option>L3</option><option>L4</option></select></div>
+        </div>
+        <div class="field"><label>Warranty?</label><select name="warranty"><option>Check</option><option>Yes</option><option>No</option></select></div>
+      </form>
+      <div class="modal-foot">
+        <button class="btn secondary" data-close-modal="1">Cancel</button>
+        <button class="btn" data-save-job="1">Create Job</button>
+      </div>
+    </div>
+  </div>`;
+}
+function renderJobDetailModal(){
+  const job = state.jobs.find(j=>j.id===ui.modal.recordId);
+  if(!job) return "";
+  const sopSteps = state.sop.filter(s=>s.id==="SOP-01");
+  const allChecked = sopSteps.every(s=>job.sop && job.sop[s.step]);
+  return `
+  <div class="modal-backdrop" data-close-modal="1">
+    <div class="modal detail-modal" data-stop="1">
+      <div class="modal-head"><h3 class="mono">${job.id}</h3><button class="modal-close" data-close-modal="1">✕</button></div>
+      <div class="modal-body">
+        <div class="grid2">
+          <div><div class="helptext">Customer</div><div>${esc(job.customer)||"—"}</div></div>
+          <div><div class="helptext">Status</div><div>${statusBadge(job.status)}</div></div>
+        </div>
+        <div class="grid2">
+          <div><div class="helptext">Assigned Technician</div><div>${esc(techFor(job.assignedTech)?.name)||"Unassigned"}</div></div>
+          <div><div class="helptext">Service</div><div class="mono">${esc(job.serviceCode)}</div></div>
+        </div>
+        <div><div class="helptext">Complaint</div><div>${esc(job.complaint)}</div></div>
+        ${job.callbackRequestedAt ? `<div class="helptext" style="color:var(--amber);">☎ OEM requested a callback — reach them at their listed contact and route via BatteryCare's central desk (do not share technician's direct number).</div>` : ""}
+        <h3 style="font-size:13px; margin-top:6px;">SOP-01 Field Service Checklist</h3>
+        <div class="sop-steps">
+          ${sopSteps.map(s=>`
+            <label class="sop-step">
+              <input type="checkbox" data-sop-check="${job.id}|${s.step}" ${job.sop && job.sop[s.step] ? 'checked':''}>
+              <span class="txt">${esc(s.process)} — Step ${s.step}<div class="evid">${esc(s.evidence)} · Owner: ${esc(s.owner)}</div></span>
+            </label>`).join("")}
+        </div>
+        <div class="grid2">
+          <div class="field"><label>Collected ₹</label><input type="number" id="jobCollected" value="${job.collected||0}"></div>
+          <div class="field"><label>Parts Cost ₹</label><input type="number" id="jobParts" value="${job.partsCost||0}"></div>
+        </div>
+        <div class="field"><label>Root Cause</label><input type="text" id="jobRootCause" value="${esc(job.rootCause)}"></div>
+        <div class="field"><label>Customer Rating (1–5)</label><input type="number" min="1" max="5" id="jobRating" value="${job.rating||0}"></div>
+      </div>
+      <div class="modal-foot">
+        ${job.status==="Assigned" ? `<button class="btn secondary" data-status="${job.id}|In Progress">Start Job</button>` : ""}
+        ${job.status==="In Progress" || job.status==="Assigned" ? `<button class="btn" ${allChecked?'':'disabled'} data-status="${job.id}|Completed" data-with-fields="1">Complete Job</button>` : ""}
+        ${job.status==="Completed" ? `<button class="btn secondary" data-status="${job.id}|Closed">Close Job</button>` : ""}
+        <button class="btn secondary" data-close-modal="1">Done</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* =========================================================
+   FIELD APP
+   ========================================================= */
+function renderFieldApp(){
+  const techs = state.technicians;
+  if(!ui.fieldTechId && techs.length) ui.fieldTechId = techs[0].id;
+  const tech = techFor(ui.fieldTechId);
+
+  return `<div class="field-frame-wrap"><div class="field-frame">
+    <div class="field-header">
+      <div style="font-family:'Space Grotesk',sans-serif; font-weight:700;">Field App</div>
+      <select id="fieldTechSelect">${techs.map(t=>`<option value="${t.id}" ${t.id===ui.fieldTechId?'selected':''}>${esc(t.name)}</option>`).join("")}</select>
+    </div>
+    ${tech ? `
+    <div class="field-scorecard">
+      <div class="name">${esc(tech.name)}</div>
+      <div class="role">${esc(tech.level)} · ${esc(tech.city)} · ${esc(tech.specialties)}</div>
+      <div class="stats">
+        <div class="stat"><div class="n">${tech.jobsCompleted||0}</div><div class="l">Jobs Done</div></div>
+        <div class="stat"><div class="n">${tech.score}%</div><div class="l">Score</div></div>
+        <div class="stat"><div class="n">${state.payouts.filter(p=>p.techId===tech.id && p.approval!=="Approved").length}</div><div class="l">Payouts Due</div></div>
+      </div>
+    </div>
+    <div class="field-tabs">
+      <button data-ftab="jobs" class="${ui.fieldTab==='jobs'?'active':''}">My Jobs</button>
+      <button data-ftab="payouts" class="${ui.fieldTab==='payouts'?'active':''}">Payouts</button>
+    </div>
+    ${ui.fieldTab==="jobs" ? renderFieldJobs(tech) : renderFieldPayouts(tech)}
+    ` : `<div class="empty-state">Add a technician in Ops Console → Technicians first.</div>`}
+  </div></div>`;
+}
+
+function renderFieldJobs(tech){
+  const jobs = state.jobs.filter(j=>j.assignedTech===tech.id && j.status!=="Closed");
+  if(!jobs.length) return `<div class="empty-state"><div class="big">📋</div>No active jobs assigned right now.</div>`;
+  return jobs.map(j=>{
+    const sopSteps = state.sop.filter(s=>s.id==="SOP-01");
+    const checkedCount = sopSteps.filter(s=>j.sop && j.sop[s.step]).length;
+    const allChecked = checkedCount===sopSteps.length;
+    return `
+    <div class="job-card">
+      <div class="top">
+        <div>
+          <h4 class="mono">${j.id}</h4>
+          <div class="desc">${esc(j.complaint)} · ${esc(j.city)}</div>
+        </div>
+        ${statusBadge(j.status)}
+      </div>
+      <div class="desc" style="margin-top:8px;">Checklist: ${checkedCount}/${sopSteps.length} steps done</div>
+      <div class="actions">
+        ${j.status==="Assigned" ? `<button class="primary" data-fstatus="${j.id}|In Progress">Start Job</button>` : ""}
+        <button data-fopen="${j.id}">Checklist</button>
+        ${j.status==="In Progress" ? `<button class="primary" data-fcomplete="${j.id}" ${allChecked?'':'disabled'}>Complete</button>` : ""}
+      </div>
+    </div>`;
+  }).join("");
+}
+function renderFieldPayouts(tech){
+  const payouts = state.payouts.filter(p=>p.techId===tech.id);
+  if(!payouts.length) return `<div class="empty-state"><div class="big">₹</div>No payouts yet — complete a job to generate one.</div>`;
+  return payouts.map(p=>`
+    <div class="job-card">
+      <div class="top">
+        <div><h4 class="mono">${p.jobId}</h4><div class="desc">${esc(p.serviceCode)}</div></div>
+        ${statusBadge(p.approval==="Approved"?"Paid":"Pending")}
+      </div>
+      <div class="desc" style="margin-top:8px; font-size:14px; color:var(--text); font-weight:600;">${fmtMoney(p.total)}</div>
+    </div>`).join("");
+}
+
+/* Field checklist mini-modal (reuses job detail modal but simplified via same handler) */
+function openFieldChecklist(jobId){ ui.modal = {type:"jobDetail", recordId: jobId}; render(); }
+
+/* =========================================================
+   OEM PANEL — brands report battery issues into BatteryCare
+   ========================================================= */
+function renderOemPanel(){
+  const oems = state.oems;
+  if(!ui.oemId && oems.length) ui.oemId = oems[0].id;
+  const oem = state.oems.find(o=>o.id===ui.oemId);
+
+  return `
+  <div class="page-head">
+    <div><h2>OEM Panel</h2><p>Report a battery issue for your brand and track it through to resolution.</p></div>
+    <div class="field" style="min-width:220px;">
+      <label>Reporting as</label>
+      <select id="oemSelect">${oems.map(o=>`<option value="${o.id}" ${o.id===ui.oemId?'selected':''}>${esc(o.brand)}</option>`).join("") || `<option>No OEMs on file</option>`}</select>
+    </div>
+  </div>
+  ${!oem ? `<div class="empty-state">Add an OEM/Brand in Ops Console → OEM Master first.</div>` : renderOemBody(oem)}`;
+}
+
+function renderOemBody(oem){
+  const myJobs = state.jobs.filter(j=>j.oemId===oem.id);
+  const open = myJobs.filter(j=>j.status!=="Completed" && j.status!=="Closed").length;
+  const resolved = myJobs.length - open;
+  const myWarranty = state.warranty.filter(w=>w.brand===oem.brand);
+
+  return `
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="lbl">Issues Reported</div><div class="val">${myJobs.length}</div></div>
+    <div class="kpi-card"><div class="lbl">Open / In Progress</div><div class="val">${open}</div></div>
+    <div class="kpi-card"><div class="lbl">Resolved</div><div class="val">${resolved}</div></div>
+    <div class="kpi-card"><div class="lbl">Warranty Claims</div><div class="val">${myWarranty.length}</div></div>
+  </div>
+
+  <div class="field-tabs" style="max-width:420px;">
+    <button data-oemtab="report" class="${ui.oemTab==='report'?'active':''}">Report Issue</button>
+    <button data-oemtab="tracker" class="${ui.oemTab==='tracker'?'active':''}">My Issues</button>
+    <button data-oemtab="warranty" class="${ui.oemTab==='warranty'?'active':''}">Warranty</button>
+  </div>
+
+  ${ui.oemTab==="report" ? renderOemReportForm(oem) : (ui.oemTab==="tracker" ? renderOemTracker(oem) : renderOemWarranty(oem))}
+  `;
+}
+
+function renderOemReportForm(oem){
+  const cities = (oem.citiesCovered||"").split(",").map(s=>s.trim()).filter(Boolean);
+  return `
+  <div class="table-wrap" style="max-width:640px; padding:20px;">
+    <h3 style="margin-bottom:4px;">Report a battery issue — ${esc(oem.brand)}</h3>
+    <p class="helptext" style="margin-bottom:16px;">This creates a job on BatteryCare's Job Register and sends it straight to the Dispatch Board.</p>
+    <form id="oemReportForm" style="display:grid; gap:12px;">
+      <div class="grid2">
+        <div class="field"><label>Customer name</label><input type="text" name="customer" required></div>
+        <div class="field"><label>Customer mobile</label><input type="text" name="mobile"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>City</label>${cities.length ? `<select name="city">${cities.map(c=>`<option>${esc(c)}</option>`).join("")}</select>` : `<input type="text" name="city">`}</div>
+        <div class="field"><label>Priority</label><select name="priority"><option>P1</option><option selected>P2</option><option>P3</option></select></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Battery model</label><input type="text" name="model"></div>
+        <div class="field"><label>Serial number</label><input type="text" name="serial"></div>
+      </div>
+      <div class="field"><label>Issue description</label><input type="text" name="complaint" placeholder="e.g. Cells not holding charge" required></div>
+      <div class="grid2">
+        <div class="field"><label>Under warranty?</label><select name="warranty"><option selected>Check</option><option>Yes</option><option>No</option></select></div>
+        <div class="field"><label>Required technician level</label><select name="requiredLevel"><option>L1</option><option selected>L2</option><option>L3</option><option>L4</option></select></div>
+      </div>
+      <button type="button" class="btn" data-save-oem-report="${oem.id}">Submit to BatteryCare</button>
+    </form>
+  </div>`;
+}
+
+const BATTERYCARE_CALLBACK_NUMBER = "1800-208-2273 (1800-BC-CARE)";
+
+function renderOemTracker(oem){
+  const rows = state.jobs.filter(j=>j.oemId===oem.id);
+  return `
+  <div class="table-wrap"><table>
+    <thead><tr><th>Job ID</th><th>Date</th><th>Customer</th><th>City</th><th>Complaint</th><th>Priority</th><th>Assigned</th><th>Status</th><th>Speak to technician</th></tr></thead>
+    <tbody>${rows.map(j=>{
+      const isAssigned = !!j.assignedTech;
+      return `
+      <tr>
+        <td class="id-cell">${j.id}</td><td>${esc(j.date)}</td><td>${esc(j.customer)}</td><td>${esc(j.city)}</td>
+        <td>${esc(j.complaint)}</td><td>${esc(j.priority)}</td>
+        <td>${isAssigned ? `<span class="badge green">Yes</span>` : `<span class="badge grey">Not yet</span>`}</td>
+        <td>${statusBadge(j.status)}</td>
+        <td>${isAssigned ? `<button class="btn small secondary" data-oem-callback="${j.id}">Request Callback</button>` : "—"}</td>
+      </tr>`;
+    }).join("") || emptyRow(9)}</tbody>
+  </table></div>
+  <p class="helptext" style="margin-top:10px;">For privacy, technician names and numbers aren't shared directly. Request a callback and BatteryCare's central desk (${BATTERYCARE_CALLBACK_NUMBER}) will connect you.</p>`;
+}
+
+function renderOemWarranty(oem){
+  const rows = state.warranty.filter(w=>w.brand===oem.brand);
+  return `
+  <div class="table-wrap"><table>
+    <thead><tr><th>Claim ID</th><th>Job</th><th>Warranty Status</th><th>OEM Approval</th><th>Claim Amount</th><th>Status</th></tr></thead>
+    <tbody>${rows.map(w=>`
+      <tr><td class="id-cell">${w.id}</td><td class="mono">${w.jobId}</td><td>${statusBadge(w.warrantyStatus)}</td>
+      <td>${statusBadge(w.oemApproval)}</td><td>${fmtMoney(w.claimAmount)}</td><td>${statusBadge(w.status)}</td></tr>`).join("") || emptyRow(6)}</tbody>
+  </table></div>`;
+}
+
+/* =========================================================
+   CUSTOMER PANEL — end users reporting directly to BatteryCare,
+   no OEM in the loop, serviced directly by BatteryCare.
+   ========================================================= */
+function renderCustomerPanel(){
+  return `
+  <div class="page-head">
+    <div><h2>Customer Panel</h2><p>Report a battery problem directly to BatteryCare — no OEM required, we service it ourselves.</p></div>
+  </div>
+  <div class="field-tabs" style="max-width:420px;">
+    <button data-ctab="report" class="${ui.customerTab==='report'?'active':''}">Report a Problem</button>
+    <button data-ctab="tracker" class="${ui.customerTab==='tracker'?'active':''}">Track My Job</button>
+  </div>
+  ${ui.customerTab==="report" ? renderCustomerReportForm() : renderCustomerTracker()}`;
+}
+
+function renderCustomerReportForm(){
+  return `
+  <div class="table-wrap" style="max-width:640px; padding:20px;">
+    <h3 style="margin-bottom:4px;">Tell us what's wrong</h3>
+    <p class="helptext" style="margin-bottom:16px;">BatteryCare will assign a technician directly — you'll be able to track progress with your mobile number.</p>
+    <form id="customerReportForm" style="display:grid; gap:12px;">
+      <div class="grid2">
+        <div class="field"><label>Your name</label><input type="text" name="customer" required></div>
+        <div class="field"><label>Mobile number</label><input type="text" name="mobile" required placeholder="Used to track your job"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>City</label><input type="text" name="city" required></div>
+        <div class="field"><label>Priority</label><select name="priority"><option>P1 — Urgent</option><option selected>P2 — Normal</option><option>P3 — Can wait</option></select></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Battery brand</label><input type="text" name="brand"></div>
+        <div class="field"><label>Battery model (if known)</label><input type="text" name="model"></div>
+      </div>
+      <div class="field"><label>Serial number (if visible on the battery)</label><input type="text" name="serial"></div>
+      <div class="field"><label>What's the problem?</label><input type="text" name="complaint" placeholder="e.g. Battery drains within a few hours" required></div>
+      <div class="field"><label>Is it still under warranty?</label><select name="warranty"><option selected>Not sure</option><option>Yes</option><option>No</option></select></div>
+      <button type="button" class="btn" data-save-customer-report="1">Submit Request</button>
+    </form>
+  </div>`;
+}
+
+function renderCustomerTracker(){
+  const jobs = ui.customerLookup
+    ? state.jobs.filter(j=>j.source==="Customer" && (j.mobile||"").replace(/\s/g,"")===ui.customerLookup.replace(/\s/g,""))
+    : [];
+  return `
+  <div class="table-wrap" style="max-width:520px; padding:18px;">
+    <div class="field">
+      <label>Enter your mobile number</label>
+      <input type="text" id="customerMobileInput" placeholder="e.g. 90000 11111" value="${esc(ui.customerLookup)}">
+    </div>
+    <button class="btn small" style="margin-top:10px;" data-customer-find="1">Find My Jobs</button>
+  </div>
+  <div style="margin-top:16px; max-width:520px;">
+    ${!ui.customerLookup ? `<div class="empty-state">Enter your mobile number above to see your reported issues.</div>`
+      : (jobs.length ? jobs.map(j=>renderCustomerJobCard(j)).join("") : `<div class="empty-state">No jobs found for that number yet.</div>`)}
+  </div>`;
+}
+
+function renderCustomerJobCard(j){
+  const tech = techFor(j.assignedTech);
+  return `
+  <div class="job-card">
+    <div class="top">
+      <div><h4 class="mono">${j.id}</h4><div class="desc">${esc(j.complaint)}</div></div>
+      ${statusBadge(j.status)}
+    </div>
+    <div class="desc" style="margin-top:8px;">
+      ${tech ? `Technician: <strong style="color:var(--text);">${esc(tech.name)}</strong> · ${esc(tech.level)} certified` : "Waiting for a technician to be assigned."}
+    </div>
+    ${(j.status==="Completed") ? `
+      <div class="actions">
+        <button class="primary" data-customer-close="${j.id}">Confirm & Close Job</button>
+      </div>` : ""}
+    ${j.status==="Closed" ? `<div class="desc" style="margin-top:8px; color:var(--green);">✓ Closed — thanks for using BatteryCare.</div>` : ""}
+  </div>`;
+}
+
+
+/* =========================================================
+   EVENT WIRING
+   ========================================================= */
+function attachHandlers(){
+  const root = document.getElementById("root");
+
+  root.querySelectorAll("[data-role]").forEach(b=> b.onclick = ()=>{ ui.role=b.dataset.role; render(); });
+  root.querySelectorAll("[data-tab]").forEach(b=> b.onclick = ()=>{ ui.opsTab=b.dataset.tab; render(); });
+  root.querySelectorAll("[data-ftab]").forEach(b=> b.onclick = ()=>{ ui.fieldTab=b.dataset.ftab; render(); });
+  root.querySelectorAll("[data-oemtab]").forEach(b=> b.onclick = ()=>{ ui.oemTab=b.dataset.oemtab; render(); });
+  root.querySelectorAll("[data-ctab]").forEach(b=> b.onclick = ()=>{ ui.customerTab=b.dataset.ctab; render(); });
+  root.querySelectorAll("[data-customer-find]").forEach(b=> b.onclick = ()=>{
+    const val = document.getElementById("customerMobileInput").value.trim();
+    ui.customerLookup = val;
+    render();
+  });
+  root.querySelectorAll("[data-customer-close]").forEach(b=> b.onclick = ()=>{
+    advanceJobStatus(b.dataset.customerClose, "Closed");
+    showToast("Job closed — thanks for confirming!");
+  });
+  root.querySelectorAll("[data-oem-callback]").forEach(b=> b.onclick = ()=>{
+    const job = state.jobs.find(j=>j.id===b.dataset.oemCallback);
+    if(job){ job.callbackRequestedAt = new Date().toISOString(); saveState(); }
+    showToast(`Callback requested. BatteryCare's desk (${BATTERYCARE_CALLBACK_NUMBER}) will call you shortly.`);
+    render();
+  });
+
+  const oemSel = document.getElementById("oemSelect");
+  if(oemSel) oemSel.onchange = (e)=>{ ui.oemId = e.target.value; render(); };
+
+  const techSel = document.getElementById("fieldTechSelect");
+  if(techSel) techSel.onchange = (e)=>{ ui.fieldTechId = e.target.value; render(); };
+
+  root.querySelectorAll("[data-add]").forEach(b=> b.onclick = ()=> openAddModal(b.dataset.add));
+  root.querySelectorAll("[data-edit]").forEach(b=> b.onclick = ()=>{ const [k,id]=b.dataset.edit.split("|"); openEditModal(k,id); });
+  root.querySelectorAll("[data-delete]").forEach(b=> b.onclick = ()=>{ const [k,id]=b.dataset.delete.split("|"); askConfirm(`Delete this ${ENTITY[k].label.toLowerCase()} record?`, ()=>deleteEntity(k,id)); });
+
+  root.querySelectorAll("[data-add-job]").forEach(b=> b.onclick = ()=>{ ui.modal={type:"job"}; render(); });
+  root.querySelectorAll("[data-del-job]").forEach(b=> b.onclick = ()=>{ const id=b.dataset.delJob; askConfirm("Delete this job?", ()=>{ state.jobs = state.jobs.filter(j=>j.id!==id); saveState(); render(); }); });
+  root.querySelectorAll("[data-job-detail]").forEach(b=> b.onclick = ()=>{ ui.modal={type:"jobDetail", recordId:b.dataset.jobDetail}; render(); });
+  root.querySelectorAll("[data-fopen]").forEach(b=> b.onclick = ()=> openFieldChecklist(b.dataset.fopen));
+
+  root.querySelectorAll("[data-assign]").forEach(b=> b.onclick = ()=>{ const [jobId,techId]=b.dataset.assign.split("|"); assignJob(jobId,techId); });
+  root.querySelectorAll("[data-pay]").forEach(b=> b.onclick = ()=> markPayoutPaid(b.dataset.pay));
+
+  root.querySelectorAll("[data-fstatus]").forEach(b=> b.onclick = ()=>{ const [id,st]=b.dataset.fstatus.split("|"); advanceJobStatus(id,st); });
+  root.querySelectorAll("[data-fcomplete]").forEach(b=> b.onclick = ()=>{ ui.modal = {type:"fieldComplete", recordId: b.dataset.fcomplete}; render(); });
+
+  root.querySelectorAll("[data-status]").forEach(b=> b.onclick = ()=>{
+    const [jobId,newStatus] = b.dataset.status.split("|");
+    const job = state.jobs.find(j=>j.id===jobId);
+    if(b.dataset.withFields && job){
+      job.collected = Number(document.getElementById("jobCollected").value)||0;
+      job.partsCost = Number(document.getElementById("jobParts").value)||0;
+      job.rootCause = document.getElementById("jobRootCause").value;
+      job.rating = Number(document.getElementById("jobRating").value)||0;
+    }
+    advanceJobStatus(jobId, newStatus);
+    closeModal();
+  });
+
+  root.querySelectorAll("[data-sop-check]").forEach(cb=> cb.onchange = ()=>{
+    const [jobId, step] = cb.dataset.sopCheck.split("|");
+    const job = state.jobs.find(j=>j.id===jobId);
+    if(!job) return;
+    job.sop = job.sop || {};
+    job.sop[step] = cb.checked;
+    saveState();
+    // re-render but keep modal open on same job
+    render();
+  });
+
+  root.querySelectorAll("[data-close-modal]").forEach(el=> el.onclick = (e)=>{ if(e.target===el) closeModal(); });
+  root.querySelectorAll("[data-stop]").forEach(el=> el.onclick = (e)=> e.stopPropagation());
+
+  const confirmYesBtn = root.querySelector("[data-confirm-yes]");
+  if(confirmYesBtn) confirmYesBtn.onclick = ()=>{ const fn = pendingConfirm; pendingConfirm=null; closeModal(); if(fn) fn(); };
+
+  const fcBtn = root.querySelector("[data-save-field-complete]");
+  if(fcBtn) fcBtn.onclick = ()=>{
+    const jobId = fcBtn.dataset.saveFieldComplete;
+    const job = state.jobs.find(j=>j.id===jobId);
+    if(job){
+      job.collected = Number(document.getElementById("fcCollected").value)||0;
+      job.partsCost = Number(document.getElementById("fcParts").value)||0;
+      job.rootCause = document.getElementById("fcRootCause").value;
+      job.rating = Number(document.getElementById("fcRating").value)||0;
+    }
+    advanceJobStatus(jobId, "Completed");
+    closeModal();
+    showToast("Job completed — payout generated.");
+  };
+
+  const saveEntityBtn = root.querySelector("[data-save-entity]");
+  if(saveEntityBtn) saveEntityBtn.onclick = ()=>{
+    const [entityKey, recordId] = saveEntityBtn.dataset.saveEntity.split("|");
+    const form = document.getElementById("entityForm");
+    const data = {};
+    ENTITY[entityKey].fields.forEach(f=>{ data[f.key] = form.elements[f.key].value; });
+    saveEntity(entityKey, data, recordId||null);
+  };
+  const saveJobBtn = root.querySelector("[data-save-job]");
+  if(saveJobBtn) saveJobBtn.onclick = ()=>{
+    const form = document.getElementById("jobForm");
+    const fd = new FormData(form);
+    const data = Object.fromEntries(fd.entries());
+    const cat = catalogueFor(data.serviceCode);
+    const id = nextId("BC-2026-", state.jobs, "id");
+    state.jobs.push({
+      id, ...data, assignedTech:"", status:"Unassigned",
+      quoted: cat?cat.price:0, collected:0, techPayout:0, partsCost:0, rootCause:"", closureDate:"", rating:0, sop:{}, source:"Ops", oemId:"", callbackRequestedAt:""
+    });
+    saveState(); closeModal(); showToast("Job created and sent to Dispatch Board.");
+  };
+
+  const oemReportBtn = root.querySelector("[data-save-oem-report]");
+  if(oemReportBtn) oemReportBtn.onclick = ()=>{
+    const oemId = oemReportBtn.dataset.saveOemReport;
+    const oem = state.oems.find(o=>o.id===oemId);
+    const form = document.getElementById("oemReportForm");
+    if(!form.reportValidity()) return;
+    const fd = new FormData(form);
+    const data = Object.fromEntries(fd.entries());
+    const cat = state.catalogue.find(c=>c.code==="BC-DIAG"); // default intake service; ops can re-code after triage
+    const id = nextId("BC-2026-", state.jobs, "id");
+    state.jobs.push({
+      id, ...data, brand: oem.brand, serviceCode: cat?cat.code:"BC-DIAG",
+      assignedTech:"", status:"Unassigned",
+      quoted: cat?cat.price:0, collected:0, techPayout:0, partsCost:0, rootCause:"", closureDate:"", rating:0, sop:{},
+      source:"OEM", oemId: oem.id, callbackRequestedAt:""
+    });
+    saveState();
+    form.reset();
+    ui.oemTab = "tracker";
+    render();
+    showToast(`Issue reported — ${id} sent to Dispatch Board.`);
+  };
+
+  const customerReportBtn = root.querySelector("[data-save-customer-report]");
+  if(customerReportBtn) customerReportBtn.onclick = ()=>{
+    const form = document.getElementById("customerReportForm");
+    if(!form.reportValidity()) return;
+    const fd = new FormData(form);
+    const data = Object.fromEntries(fd.entries());
+    const cat = state.catalogue.find(c=>c.code==="BC-DIAG");
+    const id = nextId("BC-2026-", state.jobs, "id");
+    const priority = (data.priority||"P2").split(" ")[0]; // strip the descriptive suffix
+    state.jobs.push({
+      id, ...data, priority, requiredLevel:"L2", serviceCode: cat?cat.code:"BC-DIAG",
+      assignedTech:"", status:"Unassigned",
+      quoted: cat?cat.price:0, collected:0, techPayout:0, partsCost:0, rootCause:"", closureDate:"", rating:0, sop:{},
+      source:"Customer", oemId:"", callbackRequestedAt:""
+    });
+    saveState();
+    form.reset();
+    ui.customerTab = "tracker";
+    ui.customerLookup = data.mobile;
+    render();
+    showToast(`Request submitted — ${id}. Save your mobile number to track it.`);
+  };
+}
+
+/* =========================================================
+   BOOT
+   ========================================================= */
+async function boot(){
+  document.getElementById("root").innerHTML = `<div class="loading-note">Loading BatteryCare OS…</div>`;
+  state = await loadState();
+  render();
+}
+boot();
+</script>
+</body>
+</html>
