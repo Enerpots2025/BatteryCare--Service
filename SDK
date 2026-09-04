@@ -1,0 +1,21 @@
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyA90dMO_6iaL1p3J4VYGzFpJzCbPki8fOE",
+  authDomain: "battery-care-platform.firebaseapp.com",
+  projectId: "battery-care-platform",
+  storageBucket: "battery-care-platform.firebasestorage.app",
+  messagingSenderId: "347844825034",
+  appId: "1:347844825034:web:fce74566337649274c0933",
+  measurementId: "G-3CHVNX3WGM"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
