@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — BatteryCare</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="privacy-policy.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">⚡</span>
+    <span class="brand-name">BatteryCare</span>
+  </div>
+  <div class="doc-meta">
+    <span class="doc-title">Privacy Policy</span>
+    <span class="doc-date">Effective 5 September 2026</span>
+  </div>
+</header>
+
+<div class="layout">
+
+  <nav class="toc" aria-label="Table of contents">
+    <ol>
+      <li><a href="#introduction">1. Introduction</a></li>
+      <li><a href="#information-we-collect">2. Information we collect</a></li>
+      <li><a href="#whatsapp-platform">3. WhatsApp &amp; Meta Platform data</a></li>
+      <li><a href="#how-we-use">4. How we use information</a></li>
+      <li><a href="#sharing">5. Sharing your information</a></li>
+      <li><a href="#retention">6. Data retention</a></li>
+      <li><a href="#security">7. Data security</a></li>
+      <li><a href="#your-rights">8. Your rights &amp; choices</a></li>
+      <li><a href="#opt-out">9. Opting out of WhatsApp messages</a></li>
+      <li><a href="#children">10. Children's privacy</a></li>
+      <li><a href="#changes">11. Changes to this policy</a></li>
+      <li><a href="#contact">12. Contact us</a></li>
+    </ol>
+  </nav>
+
+  <main class="content">
+
+    <p class="intro-lede">
+      This policy explains what personal information BatteryCare collects, why we collect it,
+      and how it is handled — including data processed through the WhatsApp Business Platform,
+      operated by Meta Platforms, Inc. ("Meta"). It applies to our website, our WhatsApp service
+      channel, and our engineer and customer onboarding processes.
+    </p>
+
+    <section id="introduction">
+      <h2><span class="num">1</span>Introduction</h2>
+      <p>
+        BatteryCare ("we", "us", "our") provides on-demand battery repair and replacement
+        services, connecting customers with independent field engineers via WhatsApp and our
+        website. Protecting the privacy of everyone who uses our service — customers and
+        engineers alike — is a core part of how we operate.
+      </p>
+      <p>
+        By using our WhatsApp service channel, our website, or registering as a BatteryCare
+        engineer, you agree to the collection and use of information as described in this
+        policy.
+      </p>
+    </section>
+
+    <section id="information-we-collect">
+      <h2><span class="num">2</span>Information we collect</h2>
+      <p>We collect the following categories of information:</p>
+      <h3>From customers</h3>
+      <ul>
+        <li>Name and phone number (via WhatsApp)</li>
+        <li>Service location or address you share with us</li>
+        <li>Details of the service you request (battery type, issue description)</li>
+        <li>Payment confirmation details relevant to completing an order</li>
+        <li>Messages you send us through WhatsApp, including message content and timestamps</li>
+      </ul>
+      <h3>From engineers</h3>
+      <ul>
+        <li>Name, phone number, and UPI ID for payouts</li>
+        <li>Skills, service area, and experience details provided at registration</li>
+        <li>Job acceptance, rejection, and completion activity</li>
+        <li>Earnings and payment history</li>
+      </ul>
+      <h3>Automatically collected</h3>
+      <ul>
+        <li>Basic technical metadata associated with WhatsApp message delivery (delivery and read receipts)</li>
+        <li>Standard web server logs if you visit our website (IP address, browser type, pages visited)</li>
+      </ul>
+    </section>
+
+    <section id="whatsapp-platform">
+      <h2><span class="num">3</span>WhatsApp &amp; Meta Platform data</h2>
+      <p>
+        Our service channel runs on the <strong>WhatsApp Business Platform</strong>, a product
+        operated by Meta Platforms, Inc. When you message BatteryCare on WhatsApp:
+      </p>
+      <ul>
+        <li>
+          Your messages are transmitted and processed through Meta's infrastructure in order to
+          be delivered to us, in accordance with
+          <a href="https://www.whatsapp.com/legal/business-data-processing-terms" target="_blank" rel="noopener">
+            Meta's Business Data Processing Terms</a> and the
+          <a href="https://www.whatsapp.com/legal/business-policy" target="_blank" rel="noopener">
+            WhatsApp Business Messaging Policy</a>.
+        </li>
+        <li>
+          Meta may process metadata (such as phone number, delivery status, and timestamps) to
+          operate the messaging service, secure the platform, and prevent abuse, as described in
+          the <a href="https://www.whatsapp.com/legal/privacy-policy" target="_blank" rel="noopener">
+            WhatsApp Privacy Policy</a>.
+        </li>
+        <li>
+          We do not control, and are not responsible for, Meta's own handling of your data as the
+          underlying platform provider. We encourage you to review Meta's policies linked above.
+        </li>
+        <li>
+          We only use WhatsApp message content to operate the BatteryCare service — job requests,
+          status updates, and support — and never to sell your data to third parties.
+        </li>
+      </ul>
+    </section>
+
+    <section id="how-we-use">
+      <h2><span class="num">4</span>How we use information</h2>
+      <p>We use the information we collect to:</p>
+      <ul>
+        <li>Match customers with available, appropriately skilled engineers</li>
+        <li>Send job alerts, status updates, invoices, and payment confirmations via WhatsApp</li>
+        <li>Process engineer payouts to the UPI ID provided</li>
+        <li>Respond to support requests and resolve disputes</li>
+        <li>Maintain the security and reliability of our service</li>
+        <li>Comply with applicable legal and regulatory obligations</li>
+      </ul>
+    </section>
+
+    <section id="sharing">
+      <h2><span class="num">5</span>Sharing your information</h2>
+      <p>We share information only in the following limited circumstances:</p>
+      <ul>
+        <li><strong>Between customers and engineers</strong> — so a job can actually be completed (e.g., your location shared with the assigned engineer, and the engineer's name and rating shared with you)</li>
+        <li><strong>With Meta</strong> — as a necessary part of operating our WhatsApp service channel, as described in Section 3</li>
+        <li><strong>With payment processors</strong> — to complete UPI transactions</li>
+        <li><strong>With authorities</strong> — only where required by applicable law, regulation, or valid legal process</li>
+      </ul>
+      <p>We do not sell personal information to advertisers or data brokers.</p>
+    </section>
+
+    <section id="retention">
+      <h2><span class="num">6</span>Data retention</h2>
+      <p>
+        We retain job, customer, and engineer records for as long as needed to provide the
+        service, resolve disputes, and meet our legal and accounting obligations, after which the
+        data is deleted or anonymized. WhatsApp message content is retained by us only for as
+        long as operationally necessary to support your request.
+      </p>
+    </section>
+
+    <section id="security">
+      <h2><span class="num">7</span>Data security</h2>
+      <p>
+        We apply reasonable technical and organizational measures — including access controls and
+        API key authentication on our systems — to protect the information we hold against
+        unauthorized access, alteration, or disclosure. No method of transmission or storage,
+        however, can be guaranteed to be 100% secure.
+      </p>
+    </section>
+
+    <section id="your-rights">
+      <h2><span class="num">8</span>Your rights &amp; choices</h2>
+      <p>Depending on your location, you may have the right to:</p>
+      <ul>
+        <li>Request access to the personal data we hold about you</li>
+        <li>Request correction of inaccurate data</li>
+        <li>Request deletion of your data, subject to legal or operational retention needs</li>
+        <li>Withdraw consent to future WhatsApp communications at any time</li>
+      </ul>
+      <p>To exercise any of these rights, contact us using the details in Section 12.</p>
+    </section>
+
+    <section id="opt-out">
+      <h2><span class="num">9</span>Opting out of WhatsApp messages</h2>
+      <p>
+        You can stop receiving WhatsApp messages from BatteryCare at any time by replying
+        <strong>STOP</strong> to any message, or by blocking our business number directly within
+        WhatsApp. Engineers can go offline from job alerts at any time by replying
+        <strong>OFFLINE</strong>.
+      </p>
+    </section>
+
+    <section id="children">
+      <h2><span class="num">10</span>Children's privacy</h2>
+      <p>
+        Our service is intended for use by individuals aged 18 and above. We do not knowingly
+        collect personal information from children. If you believe a minor has provided us with
+        personal data, please contact us so we can remove it.
+      </p>
+    </section>
+
+    <section id="changes">
+      <h2><span class="num">11</span>Changes to this policy</h2>
+      <p>
+        We may update this policy from time to time to reflect changes in our practices or for
+        legal, operational, or regulatory reasons. The "Effective" date at the top of this page
+        indicates when the current version took effect. Material changes will be communicated
+        through our website or WhatsApp channel where appropriate.
+      </p>
+    </section>
+
+    <section id="contact">
+      <h2><span class="num">12</span>Contact us</h2>
+      <p>If you have questions about this policy or how your data is handled, contact us at:</p>
+      <address>
+        <strong>[Your Company Legal Name]</strong><br>
+        [Registered Business Address]<br>
+        Email: <a href="mailto:privacy@batterycare.in">privacy@batterycare.in</a><br>
+        Phone: <a href="tel:+911234567890">+91 123 456 7890</a>
+      </address>
+    </section>
+
+    <p class="disclaimer">
+      This document is a general-purpose template and does not constitute legal advice. Replace
+      the bracketed placeholders with your actual company details, and have this policy reviewed
+      by a qualified lawyer to ensure it meets the specific data protection laws that apply to
+      your business (e.g. India's Digital Personal Data Protection Act, or other applicable
+      regional laws) before publishing it live.
+    </p>
+
+  </main>
+</div>
+
+<footer class="site-footer">
+  <p>© 2026 BatteryCare. All rights reserved.</p>
+</footer>
+
+</body>
+</html>
