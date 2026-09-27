@@ -226,17 +226,18 @@ tbody tr:hover .actions-col{background:#1F262E;}
 
 <script type="module">
 /* =========================================================
-   FIREBASE BRIDGE — loads the SDK, exposes a small API on
-   window.fb that the main (classic) app script below uses.
+   FIREBASE BRIDGE — Firebase is used ONLY for login now.
+   All app data (technicians, OEMs, jobs, etc.) is loaded from
+   and saved to your Render backend (Postgres), not Firestore.
    ========================================================= */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword,
   createUserWithEmailAndPassword, signOut, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import {
-  getFirestore, doc, getDoc, setDoc
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// 👇 CHANGE THIS to your actual Render URL (no trailing slash)
+const BACKEND_URL = "https://your-app-name.onrender.com";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBZ6_IPMcd9K3kWBfrzVaEDvNn-t7asBck",
@@ -249,8 +250,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
-const STATE_DOC = doc(db, "batterycare", "state");
 
 // Secondary, isolated app+auth instance used ONLY when an admin creates a
 // login for someone else. Using a separate instance means creating that
@@ -259,6 +258,15 @@ const STATE_DOC = doc(db, "batterycare", "state");
 // instance signs you in AS the new user).
 const secondaryApp = initializeApp(firebaseConfig, "Secondary");
 const secondaryAuth = getAuth(secondaryApp);
+
+// Helper: get the current user's Firebase ID token to prove to the
+// backend who is making the request.
+const getAuthHeader = async () => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Not signed in");
+  const token = await user.getIdToken();
+  return { Authorization: `Bearer ${token}` };
+};
 
 window.fb = {
   onAuthStateChanged: (cb) => onAuthStateChanged(auth, cb),
@@ -281,11 +289,50 @@ window.fb = {
   },
   sendPasswordReset: (email) => sendPasswordResetEmail(auth, email),
 
-  loadStateDoc: async () => {
-    const snap = await getDoc(STATE_DOC);
-    return snap.exists() ? snap.data() : null;
+  // Exposed so the main app script can attach a fresh ID token to any
+  // custom fetch call (used by live location pinging below).
+  getIdToken: async () => {
+    const user = auth.currentUser;
+    if (!user) throw new Error("Not signed in");
+    return user.getIdToken();
   },
-  saveStateDoc: (data) => setDoc(STATE_DOC, data)
+
+  // ---- Data now goes through Render + Postgres instead of Firestore ----
+  loadStateDoc: async () => {
+    const headers = await getAuthHeader();
+    const res = await fetch(`${BACKEND_URL}/api/state`, { headers });
+    if (!res.ok) throw new Error(`loadStateDoc failed: ${res.status}`);
+    const body = await res.json();
+    return body.data; // null if nothing saved yet — same as before
+  },
+
+  saveStateDoc: async (data) => {
+    const headers = await getAuthHeader();
+    const res = await fetch(`${BACKEND_URL}/api/state`, {
+      method: "PUT",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error(`saveStateDoc failed: ${res.status}`);
+  },
+
+  // ---- Live technician location (separate small/fast table on Render) ----
+  pingLocation: async (techId, lat, lng) => {
+    const headers = await getAuthHeader();
+    await fetch(`${BACKEND_URL}/api/location`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ techId, lat, lng })
+    });
+  },
+
+  getTechnicianLocation: async (techId) => {
+    const headers = await getAuthHeader();
+    const res = await fetch(`${BACKEND_URL}/api/location/${techId}`, { headers });
+    if (!res.ok) throw new Error(`getTechnicianLocation failed: ${res.status}`);
+    const body = await res.json();
+    return body.data; // {lat, lng, updatedAt} or null if no ping yet
+  }
 };
 window.dispatchEvent(new Event("fb-ready"));
 </script>
@@ -396,7 +443,8 @@ let ui = {
   customerLookup: "",
   modal: null,               // {type:'entity'|'assign'|'jobDetail', entityKey, recordId}
   toast: null,
-  showSampleWarranty: false  // toggles the sample OEM warranty format reference panel
+  showSampleWarranty: false, // toggles the sample OEM warranty format reference panel
+  trackingJobId: null        // job id customer is currently live-tracking on a map, or null
 };
 
 async function loadState(){
@@ -517,7 +565,8 @@ async function handleTechnicianRegister(fields){
       fvr: 0,
       payoutAccount: "",
       joinDate: new Date().toISOString().slice(0,10),
-      authUid: uid
+      authUid: uid,
+      locationConsent: fields.locationConsent ? "Yes" : "No"
     };
     state.technicians.push(rec);
     await saveState();
@@ -622,6 +671,7 @@ const ENTITY = {
       {key:"status",label:"Status",type:"select",options:["Active","Inactive"]},
       {key:"score",label:"Score %",type:"number"},
       {key:"payoutAccount",label:"Payout Account",type:"text"},
+      {key:"locationConsent",label:"Shares Live Location?",type:"select",options:["Yes","No"]},
       {key:"joinDate",label:"Join Date",type:"date"}
     ]
   },
@@ -856,6 +906,109 @@ function computeKPIs(){
 /* =========================================================
    RENDER
    ========================================================= */
+let locationWatchId = null; // browser geolocation watch handle, or null if not tracking
+
+// Starts/stops live GPS tracking based on whether this technician currently
+// has a job "In Progress". Called after every render() while on the
+// technician portal — idempotent, so it's safe to call repeatedly.
+function syncLocationTracking(tech){
+  const hasActiveJob = state.jobs.some(j => j.assignedTech === tech.id && j.status === "In Progress");
+  const consented = tech.locationConsent === "Yes";
+
+  if(hasActiveJob && consented && locationWatchId === null){
+    if(!navigator.geolocation) return;
+    locationWatchId = navigator.geolocation.watchPosition(
+      (pos)=>{
+        window.fb.pingLocation(tech.id, pos.coords.latitude, pos.coords.longitude)
+          .catch(()=>{ /* silent — a missed ping isn't worth interrupting the technician's flow */ });
+      },
+      ()=>{ /* location denied/unavailable — silently skip, job flow still works without it */ },
+      { enableHighAccuracy:true, maximumAge:10000, timeout:15000 }
+    );
+  } else if(!hasActiveJob && locationWatchId !== null){
+    navigator.geolocation.clearWatch(locationWatchId);
+    locationWatchId = null;
+  }
+}
+
+/* =========================================================
+   LIVE MAP (customer-facing) — uses Leaflet + OpenStreetMap,
+   loaded on demand so it doesn't cost anything for users who
+   never open a live-tracking view.
+   ========================================================= */
+let leafletLoadPromise = null;
+function ensureLeafletLoaded(){
+  if(window.L) return Promise.resolve();
+  if(leafletLoadPromise) return leafletLoadPromise;
+  leafletLoadPromise = new Promise((resolve, reject)=>{
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+    document.head.appendChild(link);
+    const script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load map library"));
+    document.head.appendChild(script);
+  });
+  return leafletLoadPromise;
+}
+
+let liveMapInstance = null;
+let liveMapMarker = null;
+let liveMapInterval = null;
+let liveMapForJobId = null;
+
+function stopLiveMapTracking(){
+  if(liveMapInterval) clearInterval(liveMapInterval);
+  liveMapInterval = null;
+  if(liveMapInstance){ liveMapInstance.remove(); liveMapInstance = null; }
+  liveMapMarker = null;
+  liveMapForJobId = null;
+}
+
+async function initLiveMap(job, tech){
+  // Always tear down first — the container div is freshly recreated on
+  // every render(), so any previous Leaflet instance is already orphaned.
+  stopLiveMapTracking();
+  liveMapForJobId = job.id;
+
+  try{ await ensureLeafletLoaded(); }catch(e){ return; }
+
+  const container = document.getElementById(`liveMap-${job.id}`);
+  if(!container) return; // user navigated away before the library finished loading
+
+  const fallbackLat = job.customerLat || 12.9716; // Bengaluru, as a sane default
+  const fallbackLng = job.customerLng || 77.5946;
+
+  liveMapInstance = L.map(container).setView([fallbackLat, fallbackLng], 13);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap contributors", maxZoom: 18
+  }).addTo(liveMapInstance);
+
+  if(job.customerLat && job.customerLng){
+    L.marker([job.customerLat, job.customerLng], { title: "Your location" })
+      .addTo(liveMapInstance).bindPopup("Your location");
+  }
+
+  const updateTechMarker = async ()=>{
+    try{
+      const loc = await window.fb.getTechnicianLocation(tech.id);
+      if(!loc || liveMapForJobId !== job.id) return; // tracking stopped or switched jobs mid-request
+      if(liveMapMarker){
+        liveMapMarker.setLatLng([loc.lat, loc.lng]);
+      }else{
+        liveMapMarker = L.marker([loc.lat, loc.lng], { title: tech.name }).addTo(liveMapInstance);
+        liveMapInstance.setView([loc.lat, loc.lng], 14);
+      }
+      liveMapMarker.bindPopup(`${esc(tech.name)} — last updated ${new Date(loc.updatedAt).toLocaleTimeString()}`);
+    }catch(e){ /* silent — next poll will retry */ }
+  };
+
+  updateTechMarker();
+  liveMapInterval = setInterval(updateTechMarker, 12000);
+}
+
 function render(){
   const root = document.getElementById("root");
   root.innerHTML = `
@@ -867,6 +1020,21 @@ function render(){
     ${ui.toast ? `<div class="toast">${esc(ui.toast)}</div>` : ""}
   `;
   attachHandlers();
+
+  // Live map lifecycle: (re)initialize if the customer has a tracking
+  // panel open, or tear it down if they closed it / the job moved on.
+  if(ui.trackingJobId){
+    const job = state.jobs.find(j=>j.id===ui.trackingJobId);
+    const tech = job ? techFor(job.assignedTech) : null;
+    if(job && job.status==="In Progress" && tech && tech.locationConsent==="Yes"){
+      initLiveMap(job, tech);
+    }else{
+      ui.trackingJobId = null; // job finished/changed while map was open
+      stopLiveMapTracking();
+    }
+  }else if(liveMapInstance){
+    stopLiveMapTracking();
+  }
 }
 
 function renderMainArea(){
@@ -892,6 +1060,7 @@ function renderMainArea(){
       if(authBinding.record.status==="Pending"){
         return `<div class="main">${renderPendingApprovalScreen(authBinding.record)}</div>`;
       }
+      syncLocationTracking(authBinding.record);
       return `<div class="main">${renderFieldApp(authBinding.record)}</div>`;
     }
     return `<div class="main">${renderUnauthorizedScreen("This account isn't linked to a Technician record yet. Ask BatteryCare Ops to create your login from the Technicians tab, or register from the Technician Login screen.")}</div>`;
@@ -986,6 +1155,10 @@ function renderTechnicianRegisterScreen(){
       <div class="field"><label>Specialties</label><input type="text" id="regSpecialties" placeholder="e.g. Battery/BMS"></div>
       <div class="field"><label>Email *</label><input type="email" id="regEmail" required></div>
       <div class="field"><label>Password *</label><input type="password" id="regPassword" required minlength="6"></div>
+      <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; color:var(--muted);">
+        <input type="checkbox" id="regLocationConsent" style="margin-top:3px;">
+        <span>I agree to share my live location with customers while a job is actively assigned to me. Location sharing stops automatically once the job is completed.</span>
+      </label>
       ${authError ? `<div class="helptext" style="color:var(--red);">${esc(authError)}</div>` : ""}
       <button type="button" class="btn" ${authBusy?'disabled':''} data-do-register="1">${authBusy ? "Please wait…" : "Register"}</button>
     </form>
@@ -1737,6 +1910,13 @@ function renderCustomerReportForm(){
       <div class="field"><label>Serial number (if visible on the battery)</label><input type="text" name="serial"></div>
       ${complaintFieldHTML("cust")}
       <div class="field"><label>Is it still under warranty?</label><select name="warranty"><option selected>Not sure</option><option>Yes</option><option>No</option></select></div>
+      <div class="field">
+        <label>Your location <span class="helptext">(optional, but helps us dispatch the nearest technician)</span></label>
+        <button type="button" class="btn secondary small" data-capture-location="1">📍 Share My Current Location</button>
+        <span id="locationStatus" class="helptext" style="margin-left:8px;"></span>
+        <input type="hidden" name="customerLat" id="customerLat">
+        <input type="hidden" name="customerLng" id="customerLng">
+      </div>
       <button type="button" class="btn" data-save-customer-report="1">Submit Request</button>
     </form>
   </div>`;
@@ -1762,6 +1942,8 @@ function renderCustomerTracker(){
 
 function renderCustomerJobCard(j){
   const tech = techFor(j.assignedTech);
+  const canTrackLive = j.status==="In Progress" && tech && tech.locationConsent==="Yes";
+  const isTracking = ui.trackingJobId === j.id;
   return `
   <div class="job-card">
     <div class="top">
@@ -1771,6 +1953,12 @@ function renderCustomerJobCard(j){
     <div class="desc" style="margin-top:8px;">
       ${tech ? `Technician: <strong style="color:var(--text);">${esc(tech.name)}</strong> · ${esc(tech.level)} certified` : "Waiting for a technician to be assigned."}
     </div>
+    ${canTrackLive ? `
+      <div class="actions">
+        <button class="btn small secondary" data-toggle-live-track="${j.id}">${isTracking ? "Hide Map" : "📍 Track Technician Live"}</button>
+      </div>
+      ${isTracking ? `<div id="liveMap-${j.id}" style="height:240px; border-radius:8px; margin-top:10px; background:var(--panel-2, #1a1f22);"></div>` : ""}
+    ` : ""}
     ${(j.status==="Completed") ? `
       <div class="actions">
         <button class="primary" data-customer-close="${j.id}">Confirm & Close Job</button>
@@ -1817,7 +2005,8 @@ function attachHandlers(){
       voltageClass: document.getElementById("regVoltageClass").value.trim(),
       specialties: document.getElementById("regSpecialties").value.trim(),
       email: document.getElementById("regEmail").value.trim(),
-      password: document.getElementById("regPassword").value
+      password: document.getElementById("regPassword").value,
+      locationConsent: document.getElementById("regLocationConsent").checked
     };
     handleTechnicianRegister(fields);
   });
@@ -2013,6 +2202,32 @@ function attachHandlers(){
     showToast(`Issue reported — ${id} sent to Dispatch Board.`);
   };
 
+  root.querySelectorAll("[data-toggle-live-track]").forEach(b=> b.onclick = ()=>{
+    const jobId = b.dataset.toggleLiveTrack;
+    ui.trackingJobId = (ui.trackingJobId === jobId) ? null : jobId;
+    render();
+  });
+
+  root.querySelectorAll("[data-capture-location]").forEach(b=> b.onclick = ()=>{
+    const statusEl = document.getElementById("locationStatus");
+    if(!navigator.geolocation){
+      if(statusEl) statusEl.textContent = "Location not supported by this browser.";
+      return;
+    }
+    if(statusEl) statusEl.textContent = "Getting your location…";
+    navigator.geolocation.getCurrentPosition(
+      (pos)=>{
+        document.getElementById("customerLat").value = pos.coords.latitude;
+        document.getElementById("customerLng").value = pos.coords.longitude;
+        if(statusEl) statusEl.textContent = "✓ Location captured";
+      },
+      (err)=>{
+        if(statusEl) statusEl.textContent = "Couldn't get location — you can still submit without it.";
+      },
+      { enableHighAccuracy:true, timeout:10000 }
+    );
+  });
+
   const customerReportBtn = root.querySelector("[data-save-customer-report]");
   if(customerReportBtn) customerReportBtn.onclick = ()=>{
     const form = document.getElementById("customerReportForm");
@@ -2035,6 +2250,8 @@ function attachHandlers(){
     }
     delete data.cityChoice;
     data.city = city;
+    data.customerLat = data.customerLat ? parseFloat(data.customerLat) : null;
+    data.customerLng = data.customerLng ? parseFloat(data.customerLng) : null;
     const cat = state.catalogue.find(c=>c.code==="BC-DIAG");
     const id = nextId("BC-2026-", state.jobs, "id");
     const priority = (data.priority||"P2").split(" ")[0]; // strip the descriptive suffix
