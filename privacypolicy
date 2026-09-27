@@ -74,6 +74,7 @@
         <li>Service location or address you share with us</li>
         <li>Details of the service you request (battery type, issue description)</li>
         <li>Payment confirmation details relevant to completing an order</li>
+        <li><strong>A precise location pin</strong>, if you choose to share one when reporting a job, to help us dispatch the nearest available technician</li>
         <li>Messages you send us through WhatsApp, including message content and timestamps</li>
       </ul>
       <h3>From engineers</h3>
@@ -82,6 +83,7 @@
         <li>Skills, service area, and experience details provided at registration</li>
         <li>Job acceptance, rejection, and completion activity</li>
         <li>Earnings and payment history</li>
+        <li><strong>Live location data</strong>, only if you have opted in, and only while a job is actively assigned to you — location sharing stops automatically once the job is marked complete</li>
       </ul>
       <h3>Automatically collected</h3>
       <ul>
