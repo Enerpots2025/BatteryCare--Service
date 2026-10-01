@@ -226,17 +226,17 @@ tbody tr:hover .actions-col{background:#1F262E;}
 
 <script type="module">
 /* =========================================================
-   FIREBASE BRIDGE — Firebase is used ONLY for login now.
-   All app data (technicians, OEMs, jobs, etc.) is loaded from
-   and saved to your Render backend (Postgres), not Firestore.
+   FIREBASE + BACKEND BRIDGE
+   Firebase is used ONLY for login. All app data lives in your
+   Render backend (Postgres). The rest of the app talks to
+   window.fb and never touches fetch/tokens directly.
    ========================================================= */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword,
-  createUserWithEmailAndPassword, signOut, sendPasswordResetEmail
+  createUserWithEmailAndPassword, signInAnonymously, signOut, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-// 👇 CHANGE THIS to your actual Render URL (no trailing slash)
 const BACKEND_URL = "https://batterycare-api.onrender.com";
 
 const firebaseConfig = {
@@ -251,87 +251,108 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
-// Secondary, isolated app+auth instance used ONLY when an admin creates a
-// login for someone else. Using a separate instance means creating that
-// new account does NOT sign the admin out of their own session (a normal
-// Firebase gotcha: createUserWithEmailAndPassword on the primary auth
-// instance signs you in AS the new user).
+// Secondary, isolated auth instance used ONLY when an admin creates a login
+// for someone else, so creating that account does NOT sign the admin out.
 const secondaryApp = initializeApp(firebaseConfig, "Secondary");
 const secondaryAuth = getAuth(secondaryApp);
 
-// Helper: get the current user's Firebase ID token to prove to the
-// backend who is making the request.
-const getAuthHeader = async () => {
-  const user = auth.currentUser;
+// Which version of the app data this browser last loaded or saved. Sent back
+// on every save so the server can keep records created by other people in
+// the meantime (a customer's new job, a technician's new registration).
+let stateVersion = null;
+
+// Returns a fresh login token. Customers never create an account, so for
+// customer-only calls we quietly sign them in anonymously (no email, no
+// password). Real logins are always used when present.
+const getToken = async ({ allowAnonymous = false } = {}) => {
+  let user = auth.currentUser;
+  if (!user && allowAnonymous) user = (await signInAnonymously(auth)).user;
   if (!user) throw new Error("Not signed in");
-  const token = await user.getIdToken();
-  return { Authorization: `Bearer ${token}` };
+  return user.getIdToken();
+};
+
+const api = async (method, path, { token, body } = {}) => {
+  const res = await fetch(`${BACKEND_URL}${path}`, {
+    method,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(body ? { "Content-Type": "application/json" } : {})
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  let json = null;
+  try { json = await res.json(); } catch (_) { /* non-JSON error page */ }
+  if (!res.ok) {
+    const err = new Error((json && json.error) || `Request failed (${res.status})`);
+    err.status = res.status;
+    err.code = json && json.code;
+    throw err;
+  }
+  return json;
 };
 
 window.fb = {
+  // ---- Login (Firebase) ----
   onAuthStateChanged: (cb) => onAuthStateChanged(auth, cb),
+  getCurrentUser: () => auth.currentUser,
   signIn: (email, password) => signInWithEmailAndPassword(auth, email, password),
-  // Only for first-admin bootstrap: creates + signs in on the PRIMARY auth
-  // instance (intentional — the very first admin should end up logged in).
   signUp: (email, password) => createUserWithEmailAndPassword(auth, email, password),
   signOutUser: () => signOut(auth),
+  sendPasswordReset: (email) => sendPasswordResetEmail(auth, email),
 
   // Admin-driven: create a login for an OEM/Technician/other admin without
-  // disturbing the current admin's own session, then email them a link to
-  // set their own password (nobody ever has to type/see a temp password).
+  // disturbing the admin's own session, then email a set-your-password link.
   createLoginForOther: async (email) => {
-    const tempPassword = crypto.randomUUID() + "Aa1!"; // random, discarded, never shown
+    const tempPassword = crypto.randomUUID() + "Aa1!";
     const cred = await createUserWithEmailAndPassword(secondaryAuth, email, tempPassword);
     const uid = cred.user.uid;
     await sendPasswordResetEmail(secondaryAuth, email);
-    await signOut(secondaryAuth); // clean up the secondary session
+    await signOut(secondaryAuth);
     return uid;
   },
-  sendPasswordReset: (email) => sendPasswordResetEmail(auth, email),
 
-  // Exposed so the main app script can attach a fresh ID token to any
-  // custom fetch call (used by live location pinging below).
-  getIdToken: async () => {
-    const user = auth.currentUser;
-    if (!user) throw new Error("Not signed in");
-    return user.getIdToken();
-  },
-
-  // ---- Data now goes through Render + Postgres instead of Firestore ----
+  // ---- Full app data (Ops / approved technicians / OEMs only) ----
   loadStateDoc: async () => {
-    const headers = await getAuthHeader();
-    const res = await fetch(`${BACKEND_URL}/api/state`, { headers });
-    if (!res.ok) throw new Error(`loadStateDoc failed: ${res.status}`);
-    const body = await res.json();
-    return body.data; // null if nothing saved yet — same as before
+    const token = await getToken();
+    const json = await api("GET", "/api/state", { token });
+    stateVersion = json.updatedAt || null;
+    return json.data; // null if nothing saved yet
   },
-
+  // Returns data from other people that was folded in during this save
+  // (so the screen can show it), or null.
   saveStateDoc: async (data) => {
-    const headers = await getAuthHeader();
-    const res = await fetch(`${BACKEND_URL}/api/state`, {
-      method: "PUT",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify(data)
-    });
-    if (!res.ok) throw new Error(`saveStateDoc failed: ${res.status}`);
+    const token = await getToken();
+    const json = await api("PUT", "/api/state", { token, body: { data, baseUpdatedAt: stateVersion } });
+    stateVersion = json.updatedAt || stateVersion;
+    return json.merged || null;
+  },
+  getStateVersion: () => stateVersion,
+
+  // ---- Sign-up helpers ----
+  getOnboardingStatus: async () => (await api("GET", "/api/onboarding/status")).opsBootstrap,
+  registerTechnician: async (fields) => {
+    const token = await getToken();
+    return api("POST", "/api/onboarding/technician", { token, body: fields });
+  },
+  getMyTechnicianRecord: async () => {
+    const token = await getToken();
+    return (await api("GET", "/api/onboarding/me", { token })).technician;
   },
 
-  // ---- Live technician location (separate small/fast table on Render) ----
+  // ---- Customer portal (no account needed) ----
+  submitCustomerJob: async (fields) =>
+    api("POST", "/api/customer/jobs", { token: await getToken({ allowAnonymous: true }), body: fields }),
+  getCustomerJobs: async (mobile) =>
+    (await api("GET", `/api/customer/jobs/${encodeURIComponent(mobile)}`, { token: await getToken({ allowAnonymous: true }) })).jobs,
+  closeCustomerJob: async (jobId) =>
+    api("POST", `/api/customer/jobs/${encodeURIComponent(jobId)}/close`, { token: await getToken({ allowAnonymous: true }) }),
+  getJobLocation: async (jobId) =>
+    (await api("GET", `/api/customer/location/${encodeURIComponent(jobId)}`, { token: await getToken({ allowAnonymous: true }) })).data,
+
+  // ---- Technician live location ----
   pingLocation: async (techId, lat, lng) => {
-    const headers = await getAuthHeader();
-    await fetch(`${BACKEND_URL}/api/location`, {
-      method: "POST",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ techId, lat, lng })
-    });
-  },
-
-  getTechnicianLocation: async (techId) => {
-    const headers = await getAuthHeader();
-    const res = await fetch(`${BACKEND_URL}/api/location/${techId}`, { headers });
-    if (!res.ok) throw new Error(`getTechnicianLocation failed: ${res.status}`);
-    const body = await res.json();
-    return body.data; // {lat, lng, updatedAt} or null if no ping yet
+    const token = await getToken();
+    await api("POST", "/api/location", { token, body: { techId, lat, lng } });
   }
 };
 window.dispatchEvent(new Event("fb-ready"));
@@ -425,7 +446,10 @@ function seedState(){
   };
 }
 
-let state = null;
+let state = seedState();     // safe local baseline; replaced with real data once loadState() succeeds for an authorized user
+let myTechRecord = null;     // a technician's OWN record, used only when they can't load the full dataset (e.g. still Pending)
+let customerJobsCache = [];  // redacted jobs for the customer portal — never pulled from the shared `state`
+let customerJobsLoading = false;
 let dbStatus = "connecting"; // connecting | connected | error
 let currentUser = null;      // Firebase Auth user object, or null
 let authBinding = null;      // {kind:'ops'} | {kind:'oem', record} | {kind:'technician', record} | null
@@ -462,20 +486,54 @@ async function loadState(){
     await window.fb.saveStateDoc(seeded);
     return seeded;
   }catch(e){
+    // Not signed in, still Pending, or not linked to any record are all
+    // EXPECTED outcomes for a customer or an unapproved technician — not
+    // connection problems. In those cases we deliberately keep the safe
+    // local baseline instead of overwriting it with anything, and don't
+    // show a scary "database unreachable" badge for something that isn't
+    // actually broken.
+    const expected = e && (e.code === "pending-approval" || e.code === "not-linked" || e.code === "anonymous" || e.message === "Not signed in");
+    if(expected){
+      dbStatus = "connected";
+      return null; // signal: "don't replace state", not "here is real data"
+    }
     console.error("loadState failed:", e);
     dbStatus = "error";
-    return seedState(); // fall back to local demo mode so the app still works
+    return seedState(); // genuine failure — fall back to local demo mode so the app still works
   }
 }
 async function saveState(){
   try{
-    await window.fb.saveStateDoc(state);
+    const merged = await window.fb.saveStateDoc(state);
+    if(merged){
+      // Someone else's change (a new customer job, a new technician
+      // registration) landed on the server after this browser last loaded —
+      // fold it in immediately instead of silently overwriting it next save.
+      state = { ...seedState(), ...merged };
+      showToast("Heads up: new data from someone else was just merged in automatically.");
+    }
     dbStatus = "connected";
   }catch(e){
     console.error("saveState failed:", e);
     dbStatus = "error";
-    showToast("Save failed — check your connection.");
+    showToast(e && e.message === "Not signed in" ? "You're not signed in — please log in again." : "Save failed — check your connection.");
   }
+  render();
+}
+
+// A technician who is Pending (or otherwise not yet linked in the full
+// dataset) can't load `state.technicians` for real, so their own record is
+// fetched separately here — this is what lets the "under review" screen
+// show correctly instead of a generic "not linked" error.
+async function refreshMyTechRecordIfNeeded(){
+  if(!currentUser || ui.portal!=="technician"){ return; }
+  if(state.technicians.some(t=>t.authUid===currentUser.uid)){ myTechRecord = null; return; } // real data already covers them
+  try{
+    myTechRecord = await window.fb.getMyTechnicianRecord();
+  }catch(e){
+    myTechRecord = null;
+  }
+  render();
 }
 function showToast(msg){
   ui.toast = msg;
@@ -505,7 +563,7 @@ function resolveAuthBinding(){
     const rec = state.oems.find(o=>o.authUid===currentUser.uid);
     authBinding = rec ? {kind:"oem", record:rec} : {kind:"oem", unlinked:true};
   }else if(ui.portal==="technician"){
-    const rec = state.technicians.find(t=>t.authUid===currentUser.uid);
+    const rec = state.technicians.find(t=>t.authUid===currentUser.uid) || myTechRecord;
     authBinding = rec ? {kind:"technician", record:rec} : {kind:"technician", unlinked:true};
   }
 }
@@ -545,35 +603,15 @@ async function handleTechnicianRegister(fields){
     if(!fields.name || !fields.mobile || !fields.city || !fields.email || !fields.password){
       throw { code: "missing-fields" };
     }
-    const cred = await window.fb.signUp(fields.email, fields.password); // creates + signs in as this new user
-    const uid = cred.user.uid;
-
-    const rec = {
-      id: nextId("TECH-", state.technicians, "id"),
-      name: fields.name,
-      mobile: fields.mobile,
-      email: fields.email,
-      city: fields.city,
-      state: fields.state || "",
-      level: fields.level || "L1",
-      brands: fields.brands || "",
-      voltageClass: fields.voltageClass || "",
-      specialties: fields.specialties || "",
-      status: "Pending", // Ops must approve (flip to Active) before this technician can be dispatched jobs
-      score: 0,
-      jobsCompleted: 0,
-      fvr: 0,
-      payoutAccount: "",
-      joinDate: new Date().toISOString().slice(0,10),
-      authUid: uid,
-      locationConsent: fields.locationConsent ? "Yes" : "No"
-    };
-    state.technicians.push(rec);
-    await saveState();
-    showToast("Registration submitted! An admin will review and approve your account shortly.");
+    await window.fb.signUp(fields.email, fields.password); // creates the login + signs in
+    const result = await window.fb.registerTechnician(fields); // server creates the record, always Pending
+    myTechRecord = await window.fb.getMyTechnicianRecord(); // so the "under review" screen can show right away
+    showToast(result.alreadyRegistered
+      ? "You're already registered — your account is awaiting approval."
+      : "Registration submitted! An admin will review and approve your account shortly.");
   }catch(e){
     if(e && e.code === "missing-fields") authError = "Please fill in all required fields.";
-    else authError = friendlyAuthError(e);
+    else authError = friendlyAuthError(e) || (e && e.message) || "Registration failed — please try again.";
   }
   authBusy = false; render();
 }
@@ -668,7 +706,7 @@ const ENTITY = {
       {key:"brands",label:"Brands Authorized",type:"text"},
       {key:"voltageClass",label:"Voltage Class",type:"text"},
       {key:"specialties",label:"Specialties",type:"text"},
-      {key:"status",label:"Status",type:"select",options:["Active","Inactive"]},
+      {key:"status",label:"Status",type:"select",options:["Pending","Active","Inactive"]},
       {key:"score",label:"Score %",type:"number"},
       {key:"payoutAccount",label:"Payout Account",type:"text"},
       {key:"locationConsent",label:"Shares Live Location?",type:"select",options:["Yes","No"]},
@@ -967,7 +1005,7 @@ function stopLiveMapTracking(){
   liveMapForJobId = null;
 }
 
-async function initLiveMap(job, tech){
+async function initLiveMap(job){
   // Always tear down first — the container div is freshly recreated on
   // every render(), so any previous Leaflet instance is already orphaned.
   stopLiveMapTracking();
@@ -993,15 +1031,17 @@ async function initLiveMap(job, tech){
 
   const updateTechMarker = async ()=>{
     try{
-      const loc = await window.fb.getTechnicianLocation(tech.id);
+      // Job-scoped, not technician-ID-scoped: the server only returns a
+      // position while THIS job is "In Progress" — see customer-api.js.
+      const loc = await window.fb.getJobLocation(job.id);
       if(!loc || liveMapForJobId !== job.id) return; // tracking stopped or switched jobs mid-request
       if(liveMapMarker){
         liveMapMarker.setLatLng([loc.lat, loc.lng]);
       }else{
-        liveMapMarker = L.marker([loc.lat, loc.lng], { title: tech.name }).addTo(liveMapInstance);
+        liveMapMarker = L.marker([loc.lat, loc.lng], { title: job.technicianName || "Technician" }).addTo(liveMapInstance);
         liveMapInstance.setView([loc.lat, loc.lng], 14);
       }
-      liveMapMarker.bindPopup(`${esc(tech.name)} — last updated ${new Date(loc.updatedAt).toLocaleTimeString()}`);
+      liveMapMarker.bindPopup(`${esc(job.technicianName || "Technician")} — last updated ${new Date(loc.updatedAt).toLocaleTimeString()}`);
     }catch(e){ /* silent — next poll will retry */ }
   };
 
@@ -1023,11 +1063,12 @@ function render(){
 
   // Live map lifecycle: (re)initialize if the customer has a tracking
   // panel open, or tear it down if they closed it / the job moved on.
+  // Sourced from customerJobsCache (the redacted view), never `state.jobs`
+  // — a customer session never has the full shared dataset loaded.
   if(ui.trackingJobId){
-    const job = state.jobs.find(j=>j.id===ui.trackingJobId);
-    const tech = job ? techFor(job.assignedTech) : null;
-    if(job && job.status==="In Progress" && tech && tech.locationConsent==="Yes"){
-      initLiveMap(job, tech);
+    const job = customerJobsCache.find(j=>j.id===ui.trackingJobId);
+    if(job && job.status==="In Progress" && job.technicianSharesLocation){
+      initLiveMap(job);
     }else{
       ui.trackingJobId = null; // job finished/changed while map was open
       stopLiveMapTracking();
@@ -1922,10 +1963,20 @@ function renderCustomerReportForm(){
   </div>`;
 }
 
+async function refreshCustomerJobs(mobile){
+  if(!mobile){ customerJobsCache = []; return; }
+  customerJobsLoading = true; render();
+  try{
+    customerJobsCache = await window.fb.getCustomerJobs(mobile);
+  }catch(e){
+    customerJobsCache = [];
+    showToast("Couldn't load your jobs — please check your connection and try again.");
+  }
+  customerJobsLoading = false; render();
+}
+
 function renderCustomerTracker(){
-  const jobs = ui.customerLookup
-    ? state.jobs.filter(j=>j.source==="Customer" && (j.mobile||"").replace(/\s/g,"")===ui.customerLookup.replace(/\s/g,""))
-    : [];
+  const jobs = ui.customerLookup ? customerJobsCache : [];
   return `
   <div class="table-wrap" style="max-width:520px; padding:18px;">
     <div class="field">
@@ -1936,13 +1987,13 @@ function renderCustomerTracker(){
   </div>
   <div style="margin-top:16px; max-width:520px;">
     ${!ui.customerLookup ? `<div class="empty-state">Enter your mobile number above to see your reported issues.</div>`
+      : customerJobsLoading ? `<div class="empty-state">Loading…</div>`
       : (jobs.length ? jobs.map(j=>renderCustomerJobCard(j)).join("") : `<div class="empty-state">No jobs found for that number yet.</div>`)}
   </div>`;
 }
 
 function renderCustomerJobCard(j){
-  const tech = techFor(j.assignedTech);
-  const canTrackLive = j.status==="In Progress" && tech && tech.locationConsent==="Yes";
+  const canTrackLive = j.status==="In Progress" && j.technicianSharesLocation;
   const isTracking = ui.trackingJobId === j.id;
   return `
   <div class="job-card">
@@ -1951,7 +2002,7 @@ function renderCustomerJobCard(j){
       ${statusBadge(j.status)}
     </div>
     <div class="desc" style="margin-top:8px;">
-      ${tech ? `Technician: <strong style="color:var(--text);">${esc(tech.name)}</strong> · ${esc(tech.level)} certified` : "Waiting for a technician to be assigned."}
+      ${j.technicianName ? `Technician: <strong style="color:var(--text);">${esc(j.technicianName)}</strong> · ${esc(j.technicianLevel)} certified` : "Waiting for a technician to be assigned."}
     </div>
     ${canTrackLive ? `
       <div class="actions">
@@ -2046,11 +2097,17 @@ function attachHandlers(){
   root.querySelectorAll("[data-customer-find]").forEach(b=> b.onclick = ()=>{
     const val = document.getElementById("customerMobileInput").value.trim();
     ui.customerLookup = val;
+    refreshCustomerJobs(val);
     render();
   });
-  root.querySelectorAll("[data-customer-close]").forEach(b=> b.onclick = ()=>{
-    advanceJobStatus(b.dataset.customerClose, "Closed");
-    showToast("Job closed — thanks for confirming!");
+  root.querySelectorAll("[data-customer-close]").forEach(b=> b.onclick = async ()=>{
+    try{
+      await window.fb.closeCustomerJob(b.dataset.customerClose);
+      showToast("Job closed — thanks for confirming!");
+      refreshCustomerJobs(ui.customerLookup);
+    }catch(e){
+      showToast("Couldn't close the job — please try again.");
+    }
   });
   root.querySelectorAll("[data-oem-callback]").forEach(b=> b.onclick = ()=>{
     const job = state.jobs.find(j=>j.id===b.dataset.oemCallback);
@@ -2229,7 +2286,7 @@ function attachHandlers(){
   });
 
   const customerReportBtn = root.querySelector("[data-save-customer-report]");
-  if(customerReportBtn) customerReportBtn.onclick = ()=>{
+  if(customerReportBtn) customerReportBtn.onclick = async ()=>{
     const form = document.getElementById("customerReportForm");
     if(!form.reportValidity()) return;
     const fd = new FormData(form);
@@ -2252,21 +2309,18 @@ function attachHandlers(){
     data.city = city;
     data.customerLat = data.customerLat ? parseFloat(data.customerLat) : null;
     data.customerLng = data.customerLng ? parseFloat(data.customerLng) : null;
-    const cat = state.catalogue.find(c=>c.code==="BC-DIAG");
-    const id = nextId("BC-2026-", state.jobs, "id");
     const priority = (data.priority||"P2").split(" ")[0]; // strip the descriptive suffix
-    state.jobs.push({
-      id, ...data, priority, requiredLevel:"L2", serviceCode: cat?cat.code:"BC-DIAG",
-      assignedTech:"", status:"Unassigned", createdAt: new Date().toISOString(),
-      quoted: cat?cat.price:0, collected:0, techPayout:0, partsCost:0, rootCause:"", closureDate:"", rating:0, sop:{},
-      source:"Customer", oemId:"", callbackRequestedAt:""
-    });
-    saveState();
-    form.reset();
-    ui.customerTab = "tracker";
-    ui.customerLookup = data.mobile;
-    render();
-    showToast(`Request submitted — ${id}. Save your mobile number to track it.`);
+    try{
+      const result = await window.fb.submitCustomerJob({ ...data, priority });
+      form.reset();
+      ui.customerTab = "tracker";
+      ui.customerLookup = data.mobile;
+      refreshCustomerJobs(data.mobile);
+      render();
+      showToast(`Request submitted — ${result.jobId}. Save your mobile number to track it.`);
+    }catch(e){
+      showToast("Couldn't submit your request — please check your connection and try again.");
+    }
   };
 }
 
@@ -2283,12 +2337,31 @@ async function boot(){
     if(["customer","technician","oem","ops"].includes(portalParam)) ui.portal = portalParam;
 
     // Module scripts execute in document order, so window.fb (from the
-    // bridge <script type="module"> above this one) is already ready here.
+    // Wait for Firebase to resolve the REAL signed-in user (or confirm
+    // nobody is signed in) before loading data. Firebase checks for a
+    // saved login asynchronously, so without this wait, loadState() below
+    // would run with no user confirmed yet, always fail its auth check,
+    // and silently fall back to blank default data instead of your real
+    // saved data — which is exactly the bug where Ops couldn't see new
+    // technician registrations.
+    currentUser = await new Promise((resolve)=>{
+      const unsubscribe = window.fb.onAuthStateChanged((user)=>{
+        unsubscribe();
+        resolve(user);
+      });
+    });
+
+    // Now that the real signed-in user (if any) is confirmed, keep
+    // listening for FUTURE changes (login/logout) to re-render.
     window.fb.onAuthStateChanged((user)=>{
       currentUser = user;
-      if(state) render(); // ignore the very first callback if state isn't loaded yet — the boot render below covers it
+      refreshMyTechRecordIfNeeded();
+      render();
     });
-    state = await loadState();
+
+    const loaded = await loadState();
+    if(loaded !== null) state = loaded; // null = "not authorized for the full data", keep the safe local baseline
+    await refreshMyTechRecordIfNeeded();
     render();
   }catch(e){
     console.error("BatteryCare OS failed to start:", e);
